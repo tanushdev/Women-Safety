@@ -1,0 +1,120 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Cream Background #F5F2EB */
+    --background: 43 27% 94%;
+    /* Stark Black Foreground #000000 */
+    --foreground: 0 0% 0%;
+
+    /* Cards match background for that seamless paper look */
+    --card: 43 27% 94%;
+    --card-foreground: 0 0% 0%;
+
+    --popover: 43 27% 94%;
+    --popover-foreground: 0 0% 0%;
+
+    /* Primary is Black */
+    --primary: 0 0% 0%;
+    --primary-foreground: 43 27% 94%;
+
+    /* Secondary is slightly darker cream #E6E1D6 */
+    --secondary: 43 25% 87%;
+    --secondary-foreground: 0 0% 0%;
+
+    --muted: 43 25% 87%;
+    --muted-foreground: 0 0% 40%;
+
+    --accent: 43 25% 87%;
+    --accent-foreground: 0 0% 0%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* Borders are Black */
+    --border: 0 0% 0%;
+    --input: 0 0% 0%;
+    --ring: 0 0% 0%;
+
+    /* No radius for brutalist look */
+    --radius: 0rem;
+  }
+
+  .dark {
+    /* In dark mode, we might invert or keep it. Let's keep it simple for now or invert to Black bg / Cream text */
+    --background: 0 0% 5%;
+    --foreground: 43 27% 94%;
+    --card: 0 0% 5%;
+    --card-foreground: 43 27% 94%;
+    --popover: 0 0% 5%;
+    --popover-foreground: 43 27% 94%;
+    --primary: 43 27% 94%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 43 27% 94%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 43 27% 60%;
+    --accent: 0 0% 15%;
+    --accent-foreground: 43 27% 94%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 43 27% 94%;
+    --border: 43 27% 94%;
+    --input: 43 27% 94%;
+    --ring: 43 27% 94%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  }
+
+  /* Typography overrides for that 'Editorial' look */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-display tracking-tight font-bold;
+  }
+}
+
+/* Custom scrollbar - Brutalist */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-background border-l border-black;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-black border border-white;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-800;
+}
+
+/* MapTiler overrides for brutalist theme */
+.maplibregl-popup-content {
+  @apply rounded-none border-2 border-black shadow-brutal !important;
+  background-color: #F5F2EB !important;
+  color: black !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+.maplibregl-popup-close-button {
+  @apply text-black hover:bg-black hover:text-white !important;
+}

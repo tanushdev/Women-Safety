@@ -1,0 +1,105 @@
+name: women_safety_app
+description: Women Safety Mobile Application with SOS, Live Tracking, and Emergency Alerts
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # Routing
+  go_router: ^14.8.1
+
+  # Network & API
+  dio: ^5.8.0
+  retrofit: ^4.4.2
+  pretty_dio_logger: ^1.4.0
+
+  # WebSocket
+  socket_io_client: ^3.0.2
+
+  # Local Storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  shared_preferences: ^2.5.3
+
+  # Location & Maps
+  geolocator: ^13.0.2
+  google_maps_flutter: ^2.10.0
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+  # Permissions
+  permission_handler: ^11.4.0
+
+  # Sensors & Gestures
+  sensors_plus: ^6.1.1
+
+  # Audio Recording (removed due to compatibility issues)
+  # record: ^5.2.1
+  path_provider: ^2.1.5
+
+  # Media
+  image_picker: ^1.1.2
+  video_player: ^2.9.3
+
+  # SMS & Communication
+  url_launcher: ^6.3.1
+  # Note: SMS is sent via backend using Twilio
+
+  # Notifications
+  flutter_local_notifications: ^18.0.1
+
+  # Background Services
+  flutter_background_service: ^5.1.0
+  # workmanager removed - incompatible with Flutter 3.38
+
+  # Firebase
+  firebase_core: ^3.9.0
+  firebase_messaging: ^15.2.4
+
+  # UI & Animations
+  flutter_svg: ^2.0.17
+  google_fonts: ^6.2.1
+  lottie: ^3.3.1
+  shimmer: ^3.0.0
+
+  # Utilities
+  intl: ^0.20.2
+  uuid: ^4.5.1
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+  # Haptic Feedback
+  vibration: ^2.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Linting
+  flutter_lints: ^3.0.1
+
+  # Code Generation
+  build_runner: ^2.4.7
+  riverpod_generator: ^2.3.9
+  retrofit_generator: ^8.0.6
+  json_serializable: ^6.7.1
+  freezed: ^2.4.6
+  hive_generator: ^2.0.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/animations/
+    - assets/sounds/
