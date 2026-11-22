@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import * as maptilersdk from '@maptiler/sdk'
 import '@maptiler/sdk/dist/maptiler-sdk.css'
 import { useSocket } from '../../hooks/useSocket'
 import { API_URL } from '@/config/api'
-import { Users, Shield, MapPin, Radio, AlertTriangle } from 'lucide-react'
+import { Users, Shield, MapPin, Radio, AlertTriangle, Crosshair } from 'lucide-react'
 
 interface SOSLocation {
     id: string
@@ -42,6 +42,19 @@ interface User {
     phone?: string
 }
 
+// Coordinate normalizer: GeoJSON strictly requires [longitude, latitude].
+// In India, Latitude is ~6° to 38°N and Longitude is ~65° to 100°E.
+// If inverted [lat, lng] is supplied, swap to [lng, lat] to prevent markers from landing in the Arctic or ocean.
+function normalizeCoords(c1: number, c2: number): [number, number] {
+    if (typeof c1 !== 'number' || typeof c2 !== 'number' || isNaN(c1) || isNaN(c2)) {
+        return [73.165, 18.94]
+    }
+    if (c1 >= 6.0 && c1 <= 38.0 && c2 >= 65.0 && c2 <= 100.0) {
+        return [c2, c1] // Swapped
+    }
+    return [c1, c2]
+}
+
 export function LiveSOSMap() {
     const mapContainer = useRef<HTMLDivElement>(null)
     const map = useRef<maptilersdk.Map | null>(null)
@@ -58,7 +71,7 @@ export function LiveSOSMap() {
     const [showZones, setShowZones] = useState(true)
     const [showUsers, setShowUsers] = useState(true)
 
-    // Center on project telemetry data: Navi Mumbai / Panvel [73.165, 18.94]
+    // Default center: Navi Mumbai / Panvel [73.165, 18.94]
     const defaultCenter: [number, number] = [73.165, 18.94]
 
     // Expose one-click beacon resolve to marker popup DOM
@@ -86,6 +99,7 @@ export function LiveSOSMap() {
 
     // Fetch live real data with deduplication to prevent duplicate stacked markers
     useEffect(() => {
+        let isMounted = true
         const fetchData = async () => {
             const headers = { 'ngrok-skip-browser-warning': 'true' }
 
@@ -97,26 +111,29 @@ export function LiveSOSMap() {
                     fetch(`${API_URL}/zones`, { headers }).catch(() => null)
                 ])
 
+                if (!isMounted) return
+
                 if (sosRes && sosRes.ok) {
                     const data = await sosRes.json()
                     const rawList = Array.isArray(data) ? data : []
 
                     const valid = rawList
                         .filter((sos: any) => {
-                            const coords = sos.currentLocation?.coordinates || sos.initialLocation?.coordinates
-                            return coords && coords[0] !== 0 && coords[1] !== 0
+                            const rawCoords = sos.currentLocation?.coordinates || sos.initialLocation?.coordinates
+                            return rawCoords && rawCoords[0] !== 0 && rawCoords[1] !== 0
                         })
                         .map((sos: any) => {
-                            const coords = sos.currentLocation?.coordinates || sos.initialLocation?.coordinates
+                            const rawCoords = sos.currentLocation?.coordinates || sos.initialLocation?.coordinates
+                            const [lng, lat] = normalizeCoords(rawCoords[0], rawCoords[1])
                             const userObj = typeof sos.userId === 'object' && sos.userId !== null ? sos.userId : null
                             return {
                                 id: sos._id,
                                 userId: userObj?._id || (typeof sos.userId === 'string' ? sos.userId : undefined),
-                                lng: coords[0],
-                                lat: coords[1],
+                                lng,
+                                lat,
                                 status: (sos.status || 'TRIGGERED').toLowerCase(),
-                                userName: userObj?.name || 'Citizen in Distress',
-                                phone: userObj?.phone || '',
+                                userName: userObj?.name || sos.userName || 'Citizen in Distress',
+                                phone: userObj?.phone || sos.userPhone || '',
                                 createdAt: sos.createdAt || new Date().toISOString(),
                             }
                         })
@@ -124,12 +141,11 @@ export function LiveSOSMap() {
                     // Sort descending by creation date so freshest telemetry wins
                     valid.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-                    // Deduplicate by user or cluster proximate anonymous triggers so historical test trails collapse to 1 single latest active beacon
+                    // Deduplicate by user or cluster proximate triggers
                     const userSOSMap = new Map<string, SOSLocation>()
                     valid.forEach((item: any) => {
                         let dedupeKey = item.userId || (item.phone ? item.phone : (item.userName !== 'Citizen in Distress' ? item.userName : null))
                         
-                        // If no specific identity is attached (e.g. anonymous test), collapse triggers within ~1.5km to the most recent alert
                         if (!dedupeKey) {
                             for (const [key, existing] of userSOSMap.entries()) {
                                 const dLat = Math.abs(existing.lat - item.lat)
@@ -156,14 +172,17 @@ export function LiveSOSMap() {
                         .filter((v: any) => v.currentLocation?.coordinates &&
                             v.currentLocation.coordinates[0] !== 0 &&
                             v.currentLocation.coordinates[1] !== 0)
-                        .map((v: any) => ({
-                            id: v._id,
-                            lng: v.currentLocation.coordinates[0],
-                            lat: v.currentLocation.coordinates[1],
-                            name: v.userId?.name || 'Guardian Responder',
-                            status: v.status || 'available',
-                            governmentId: v.governmentId,
-                        }))
+                        .map((v: any) => {
+                            const [lng, lat] = normalizeCoords(v.currentLocation.coordinates[0], v.currentLocation.coordinates[1])
+                            return {
+                                id: v._id,
+                                lng,
+                                lat,
+                                name: v.userId?.name || 'Guardian Responder',
+                                status: v.status || 'available',
+                                governmentId: v.governmentId,
+                            }
+                        })
                     setVolunteers(vols)
                 }
 
@@ -173,13 +192,16 @@ export function LiveSOSMap() {
                         .filter((u: any) => u.lastLocation?.coordinates &&
                             u.lastLocation.coordinates[0] !== 0 &&
                             u.lastLocation.coordinates[1] !== 0)
-                        .map((u: any) => ({
-                            id: u._id,
-                            lng: u.lastLocation.coordinates[0],
-                            lat: u.lastLocation.coordinates[1],
-                            name: u.name || 'User',
-                            phone: u.phone,
-                        }))
+                        .map((u: any) => {
+                            const [lng, lat] = normalizeCoords(u.lastLocation.coordinates[0], u.lastLocation.coordinates[1])
+                            return {
+                                id: u._id,
+                                lng,
+                                lat,
+                                name: u.name || 'User',
+                                phone: u.phone,
+                            }
+                        })
                     setUsers(usersList)
                 }
 
@@ -189,14 +211,17 @@ export function LiveSOSMap() {
                         .filter((z: any) => z.centerPoint?.coordinates &&
                             z.centerPoint.coordinates[0] !== 0 &&
                             z.centerPoint.coordinates[1] !== 0)
-                        .map((z: any) => ({
-                            id: z._id,
-                            name: z.name,
-                            type: z.type,
-                            severity: z.severity || 'medium',
-                            center: z.centerPoint.coordinates as [number, number],
-                            radius: z.radius || 500,
-                        }))
+                        .map((z: any) => {
+                            const normalized = normalizeCoords(z.centerPoint.coordinates[0], z.centerPoint.coordinates[1])
+                            return {
+                                id: z._id,
+                                name: z.name,
+                                type: z.type,
+                                severity: z.severity || 'medium',
+                                center: normalized,
+                                radius: z.radius || 500,
+                            }
+                        })
                     setZones(zonesList)
                 }
 
@@ -207,7 +232,10 @@ export function LiveSOSMap() {
 
         fetchData()
         const interval = setInterval(fetchData, 10000)
-        return () => clearInterval(interval)
+        return () => {
+            isMounted = false
+            clearInterval(interval)
+        }
     }, [])
 
     // WebSocket live event updates with deduplication
@@ -218,17 +246,18 @@ export function LiveSOSMap() {
             const coords = event.location?.coordinates || event.initialLocation?.coordinates
             if (!coords || coords[0] === 0 || coords[1] === 0) return
 
+            const [lng, lat] = normalizeCoords(coords[0], coords[1])
             const userObj = typeof event.userId === 'object' && event.userId !== null ? event.userId : null
             const userId = userObj?._id || (typeof event.userId === 'string' ? event.userId : undefined)
-            const phone = userObj?.phone || ''
-            const userName = userObj?.name || 'Citizen in Distress'
+            const phone = userObj?.phone || event.userPhone || ''
+            const userName = userObj?.name || event.userName || 'Citizen in Distress'
             const dedupeKey = userId || phone || (userName !== 'Citizen in Distress' ? userName : event._id || event.id)
 
             const newSos: SOSLocation = {
                 id: event._id || event.id,
                 userId,
-                lng: coords[0],
-                lat: coords[1],
+                lng,
+                lat,
                 status: (event.status || 'triggered').toLowerCase(),
                 userName,
                 phone,
@@ -246,10 +275,11 @@ export function LiveSOSMap() {
 
         socket.on('sos:location:updated', (event: any) => {
             if (!event.latitude || !event.longitude) return
+            const [lng, lat] = normalizeCoords(event.longitude, event.latitude)
             setSOSLocations(prev =>
                 prev.map(sos =>
                     sos.id === event.sosId
-                        ? { ...sos, lng: event.longitude, lat: event.latitude }
+                        ? { ...sos, lng, lat }
                         : sos
                 )
             )
@@ -268,7 +298,7 @@ export function LiveSOSMap() {
         }
     }, [socket])
 
-    // Initialize Map with zoom-adaptive marker scaling
+    // Initialize Map with zoom-adaptive marker scaling & ResizeObserver
     useEffect(() => {
         if (map.current || !mapContainer.current) return
 
@@ -290,15 +320,9 @@ export function LiveSOSMap() {
             })
             map.current = mapInstance
 
-            // Dynamic scale update based on zoom level:
-            // High Zoom (15+): 1.05 (detailed street level)
-            // City Zoom (12-14): 0.70 - 0.85 (compact)
-            // Region Zoom (9-11): 0.40 - 0.55 (small dot)
-            // National Zoom (<=7): 0.20 (micro beacon dot - clean and never cluttering)
             const updateIconScale = () => {
                 if (!mapContainer.current || !map.current) return
                 const z = map.current.getZoom()
-                // Smooth responsive scale from 0.20 (at zoom 5) to 1.05 (at zoom 15)
                 const normalized = Math.max(0, Math.min(1, (z - 5) / 10))
                 const s = 0.20 + Math.pow(normalized, 1.45) * 0.85
                 mapContainer.current.style.setProperty('--map-icon-scale', s.toFixed(3))
@@ -351,6 +375,18 @@ export function LiveSOSMap() {
             map.current?.remove()
             map.current = null
         }
+    }, [])
+
+    // 🎯 Glitch Fix: ResizeObserver to prevent canvas skew / grey cuts when container resizes
+    useEffect(() => {
+        if (!mapContainer.current) return
+        const ro = new ResizeObserver(() => {
+            if (map.current) {
+                map.current.resize()
+            }
+        })
+        ro.observe(mapContainer.current)
+        return () => ro.disconnect()
     }, [])
 
     // Update Markers strictly at stable exact GPS coordinates with zero jitter
@@ -523,7 +559,6 @@ export function LiveSOSMap() {
         // Civilian User Markers
         if (showUsers) {
             users.forEach((user) => {
-                // If user is already shown as active SOS, skip duplicate marker
                 if (sosLocations.some(s => s.userName === user.name || (s.phone && s.phone === user.phone))) return
 
                 const key = `user-${user.id}`
@@ -559,7 +594,7 @@ export function LiveSOSMap() {
             })
         }
 
-        // Remove old / deactivated markers
+        // Clean up unmounted markers
         Object.keys(markersRef.current).forEach(key => {
             if (!currentMarkerKeys.has(key)) {
                 markersRef.current[key].remove()
@@ -567,23 +602,42 @@ export function LiveSOSMap() {
             }
         })
 
-        // Fit bounds ONCE on initial real data load so map doesn't twitch/glitch on updates
+        // Fit bounds ONCE on initial real data load
         if (!hasFittedBoundsRef.current && map.current) {
             const allPoints: [number, number][] = [
                 ...sosLocations.map(s => [s.lng, s.lat] as [number, number]),
                 ...volunteers.map(v => [v.lng, v.lat] as [number, number]),
                 ...zones.map(z => z.center),
                 ...users.map(u => [u.lng, u.lat] as [number, number]),
-            ].filter(p => p[0] > 60 && p[0] < 90 && p[1] > 8 && p[1] < 38) // Valid India coordinates
+            ].filter(p => p[0] > 65 && p[0] < 100 && p[1] > 6 && p[1] < 38)
 
             if (allPoints.length > 0) {
                 const bounds = new maptilersdk.LngLatBounds()
                 allPoints.forEach(p => bounds.extend(p))
-                map.current.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 1200 })
+                map.current.fitBounds(bounds, { padding: 80, maxZoom: 14.5, duration: 800 })
                 hasFittedBoundsRef.current = true
             }
         }
     }, [sosLocations, volunteers, zones, users, showVolunteers, showZones, showUsers, loading])
+
+    // Manual Re-center & Fit All Beacons handler
+    const fitAllBeacons = useCallback(() => {
+        if (!map.current) return
+        const allPoints: [number, number][] = [
+            ...sosLocations.map(s => [s.lng, s.lat] as [number, number]),
+            ...volunteers.map(v => [v.lng, v.lat] as [number, number]),
+            ...zones.map(z => z.center),
+            ...users.map(u => [u.lng, u.lat] as [number, number]),
+        ].filter(p => p[0] > 65 && p[0] < 100 && p[1] > 6 && p[1] < 38)
+
+        if (allPoints.length > 0) {
+            const bounds = new maptilersdk.LngLatBounds()
+            allPoints.forEach(p => bounds.extend(p))
+            map.current.fitBounds(bounds, { padding: 80, maxZoom: 14.5, duration: 800 })
+        } else {
+            map.current.flyTo({ center: defaultCenter, zoom: 12.5, duration: 800 })
+        }
+    }, [sosLocations, volunteers, zones, users])
 
     return (
         <div className="relative w-full h-full min-h-[440px] rounded-2xl overflow-hidden bg-slate-50">
@@ -608,7 +662,7 @@ export function LiveSOSMap() {
                 </div>
             )}
 
-            {/* 🎯 Modern Bright Pill Filter Controls (Matching Reference Mockup) */}
+            {/* Filter Pills */}
             {!loading && !error && (
                 <div className="absolute top-4 left-4 flex items-center gap-2 z-10 flex-wrap">
                     <button
@@ -646,10 +700,19 @@ export function LiveSOSMap() {
                         <MapPin className="w-3.5 h-3.5 text-blue-500" />
                         <span>Havens ({zones.length})</span>
                     </button>
+
+                    <button
+                        onClick={fitAllBeacons}
+                        title="Fit All Beacons in View"
+                        className="px-3 py-1.5 rounded-full bg-white/95 text-slate-700 hover:text-slate-900 border border-slate-200/90 shadow-sm text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-50 transition-colors"
+                    >
+                        <Crosshair className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Fit View</span>
+                    </button>
                 </div>
             )}
 
-            {/* 🎯 Real-Time Status Beacon Pill */}
+            {/* Real-Time Status Beacon Pill */}
             {!loading && !error && (
                 <div className="absolute top-4 right-14 z-10">
                     <div className="px-3.5 py-1.5 rounded-full bg-white/95 backdrop-blur-md border border-slate-200/80 shadow-sm flex items-center gap-2 text-xs font-semibold text-slate-700">
