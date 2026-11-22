@@ -17,7 +17,7 @@ class AppConfig {
   static const double locationAccuracyMeters = 10.0;
 
   // SOS Configuration
-  static const Duration audioRecordingDuration = Duration(seconds: 20);
+  static const Duration audioRecordingDuration = Duration(seconds: 25);
   static const int shakeSensitivity = 15; // Shake force threshold
   static const int powerButtonPressCount = 3; // Number of rapid presses
   static const Duration powerButtonTimeWindow = Duration(seconds: 2);

@@ -101,9 +101,9 @@ class BlackboxService {
     }
   }
 
-  /// Automatically arms and records tamper-evident Blackbox audio from phone microphone
+  /// Automatically arms and records tamper-evident Blackbox audio from phone microphone (full 25 seconds)
   Future<String?> startBlackboxCapture({
-    Duration duration = const Duration(seconds: 6),
+    Duration duration = const Duration(seconds: 25),
     Function(BlackboxIncident)? onSealed,
   }) async {
     if (_isRecording) return _lastRecordedAudioPath;
@@ -234,7 +234,7 @@ class BlackboxService {
           '${AppConfig.apiBaseUrl}/media/evidence/$sosId/audio',
           data: {
             'base64': base64Audio,
-            'duration': 20,
+            'duration': 25,
             'filename': 'phone_mic_${sosId}_${DateTime.now().millisecondsSinceEpoch}.m4a',
             'sha256Checksum': sha256Digest,
           },
@@ -245,7 +245,7 @@ class BlackboxService {
           '${AppConfig.apiBaseUrl}/sos/$sosId/audio',
           data: {
             'base64': base64Audio,
-            'duration': 20,
+            'duration': 25,
             'filename': 'phone_mic_${sosId}_${DateTime.now().millisecondsSinceEpoch}.m4a',
             'sha256Checksum': sha256Digest,
           },

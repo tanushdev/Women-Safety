@@ -189,11 +189,11 @@ class _SosScreenState extends ConsumerState<SosScreen> with TickerProviderStateM
   }
 
   Future<void> _triggerSOSApi() async {
-    // 1. Immediately initiate Blackbox capture from phone microphone with 6-second auto-seal for fast upload
+    // 1. Initiate full 25-second Blackbox capture from phone microphone
     BlackboxService().startBlackboxCapture(
-      duration: const Duration(seconds: 6),
+      duration: const Duration(seconds: 25),
       onSealed: (incident) async {
-        debugPrint('🎙️ 6s Blackbox microphone capture finished. Uploading real audio...');
+        debugPrint('🎙️ Full 25s Blackbox microphone capture finished. Uploading real audio...');
         if (_sosId != null) {
           await BlackboxService().uploadBlackboxAudio(_sosId!, filePath: incident.audioPath);
         }
