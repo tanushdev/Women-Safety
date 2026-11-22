@@ -14,6 +14,8 @@ import { MediaModule } from './modules/media/media.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { JourneyModule } from './modules/journey/journey.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { GatewayModule } from './gateway/gateway.module';
 
 // Common
@@ -73,6 +75,8 @@ import { LoggerModule } from './common/logger/logger.module';
         AdminModule,
         AnalyticsModule,
         NotificationsModule,
+        JourneyModule,
+        ReportsModule,
         GatewayModule,
     ],
 })

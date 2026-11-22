@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'
+import { API_URL } from '@/config/api'
+import { Search, RefreshCw, Trash2 } from 'lucide-react'
 
 interface User {
     _id: string
@@ -21,7 +21,7 @@ interface User {
 export function Users() {
     const [users, setUsers] = useState<User[]>([])
     const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
+    const [, setError] = useState<string | null>(null)
     const [searchTerm, setSearchTerm] = useState('')
     const [roleFilter, setRoleFilter] = useState<string>('all')
     const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -37,7 +37,7 @@ export function Users() {
             setError(null)
         } catch (err) {
             console.error('Error fetching users:', err)
-            setError('Failed to load users')
+            setError('Failed to query user registry')
             setUsers([])
         } finally {
             setLoading(false)
@@ -78,7 +78,6 @@ export function Users() {
         return matchesSearch && matchesRole
     })
 
-    // Stats
     const stats = {
         total: users.length,
         active: users.filter(u => u.status === 'active').length,
@@ -87,7 +86,7 @@ export function Users() {
     }
 
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('en-IN', {
+        return new Date(dateString).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
@@ -96,171 +95,152 @@ export function Users() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="w-8 h-8 border-4 border-black border-t-transparent animate-spin"></div>
-            </div>
-        )
-    }
-
-    if (error) {
-        return (
-            <div className="border-2 border-black bg-red-50 p-6">
-                <p className="font-bold text-red-600 mb-4">{error}</p>
-                <button
-                    onClick={fetchUsers}
-                    className="px-4 py-2 bg-black text-white font-bold hover:bg-gray-800"
-                >
-                    RETRY
-                </button>
+            <div className="flex items-center justify-center h-64 text-slate-500 font-mono text-xs">
+                <RefreshCw className="w-5 h-5 animate-spin mr-2 text-slate-700" />
+                <span>INDEXING IDENTITY REGISTRY...</span>
             </div>
         )
     }
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="command-panel p-6 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-200 shadow-sm">
                 <div>
-                    <h1 className="font-display font-black text-4xl tracking-tighter">USERS</h1>
-                    <p className="text-gray-500 font-mono text-sm mt-1">MANAGE ALL REGISTERED USERS</p>
+                    <div className="flex items-center gap-2 mb-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-600" />
+                        <span className="text-[10px] font-mono font-semibold tracking-wider text-blue-600 uppercase">
+                            Identity & Access Registry
+                        </span>
+                    </div>
+                    <h1 className="text-xl font-bold tracking-tight text-slate-900 uppercase font-mono">
+                        User Directory
+                    </h1>
+                    <p className="text-xs text-slate-500 font-mono">Registered civilians, emergency responders, and command dispatchers</p>
                 </div>
-                <button
-                    onClick={fetchUsers}
-                    className="px-6 py-3 bg-black text-white font-bold tracking-wide hover:bg-gray-800 transition-colors flex items-center gap-2"
-                >
-                    ↻ REFRESH
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={fetchUsers}
+                        className="command-button-secondary px-3.5 py-2 rounded-lg text-xs font-mono flex items-center gap-2"
+                    >
+                        <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>SYNC</span>
+                    </button>
+                </div>
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="border-2 border-black p-6 bg-white">
-                    <div className="font-display font-black text-4xl">{stats.total}</div>
-                    <div className="text-xs font-mono uppercase tracking-wider text-gray-500 mt-1">TOTAL USERS</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-mono">
+                <div className="command-card p-4 rounded-xl border border-slate-200">
+                    <div className="text-2xl font-bold text-slate-900 tabular-nums">{stats.total}</div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Total Users</div>
                 </div>
-                <div className="border-2 border-black p-6 bg-green-50">
-                    <div className="font-display font-black text-4xl text-green-600">{stats.active}</div>
-                    <div className="text-xs font-mono uppercase tracking-wider text-gray-500 mt-1">ACTIVE</div>
+                <div className="command-card p-4 rounded-xl border border-emerald-200 bg-emerald-50/40">
+                    <div className="text-2xl font-bold text-emerald-600 tabular-nums">{stats.active}</div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Active Accounts</div>
                 </div>
-                <div className="border-2 border-black p-6 bg-blue-50">
-                    <div className="font-display font-black text-4xl text-blue-600">{stats.volunteers}</div>
-                    <div className="text-xs font-mono uppercase tracking-wider text-gray-500 mt-1">VOLUNTEERS</div>
+                <div className="command-card p-4 rounded-xl border border-blue-200 bg-blue-50/40">
+                    <div className="text-2xl font-bold text-blue-600 tabular-nums">{stats.volunteers}</div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Guardian Units</div>
                 </div>
-                <div className="border-2 border-black p-6 bg-purple-50">
-                    <div className="font-display font-black text-4xl text-purple-600">{stats.admins}</div>
-                    <div className="text-xs font-mono uppercase tracking-wider text-gray-500 mt-1">ADMINS</div>
+                <div className="command-card p-4 rounded-xl border border-purple-200 bg-purple-50/40">
+                    <div className="text-2xl font-bold text-purple-600 tabular-nums">{stats.admins}</div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">Dispatch Admins</div>
                 </div>
             </div>
 
             {/* Search and Filters */}
-            <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1">
+            <div className="flex flex-col sm:flex-row gap-3 font-mono">
+                <div className="flex-1 relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
                         type="text"
                         placeholder="Search by name, phone, or email..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-black font-mono focus:ring-0 focus:outline-none"
+                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-800 shadow-sm"
                     />
                 </div>
                 <select
                     value={roleFilter}
                     onChange={(e) => setRoleFilter(e.target.value)}
-                    className="px-4 py-3 border-2 border-black font-mono bg-white focus:ring-0 focus:outline-none"
+                    className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none shadow-sm"
                 >
                     <option value="all">ALL ROLES</option>
-                    <option value="user">USERS ONLY</option>
-                    <option value="volunteer">VOLUNTEERS ONLY</option>
+                    <option value="user">CIVILIANS ONLY</option>
+                    <option value="volunteer">GUARDIANS ONLY</option>
                     <option value="admin">ADMINS ONLY</option>
                 </select>
             </div>
 
             {/* Users Table */}
-            <div className="border-2 border-black bg-white overflow-hidden">
+            <div className="command-panel rounded-xl overflow-hidden border border-slate-200 shadow-sm">
                 <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead className="bg-black text-white">
-                            <tr>
-                                <th className="px-6 py-4 text-left font-mono text-xs uppercase tracking-wider">USER</th>
-                                <th className="px-6 py-4 text-left font-mono text-xs uppercase tracking-wider">PHONE</th>
-                                <th className="px-6 py-4 text-left font-mono text-xs uppercase tracking-wider">ROLE</th>
-                                <th className="px-6 py-4 text-left font-mono text-xs uppercase tracking-wider">STATUS</th>
-                                <th className="px-6 py-4 text-left font-mono text-xs uppercase tracking-wider">LOCATION</th>
-                                <th className="px-6 py-4 text-left font-mono text-xs uppercase tracking-wider">JOINED</th>
-                                <th className="px-6 py-4 text-right font-mono text-xs uppercase tracking-wider">ACTIONS</th>
+                    <table className="w-full text-xs font-mono">
+                        <thead>
+                            <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 text-left">
+                                <th className="p-3.5 uppercase font-semibold">User Identity</th>
+                                <th className="p-3.5 uppercase font-semibold">Contact</th>
+                                <th className="p-3.5 uppercase font-semibold">Role</th>
+                                <th className="p-3.5 uppercase font-semibold">Account Status</th>
+                                <th className="p-3.5 uppercase font-semibold">Coordinates</th>
+                                <th className="p-3.5 uppercase font-semibold">Registered</th>
+                                <th className="p-3.5 uppercase font-semibold text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="divide-y divide-slate-100">
                             {filteredUsers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center font-mono text-gray-500">
-                                        NO USERS FOUND
+                                    <td colSpan={7} className="p-10 text-center text-slate-400">
+                                        No users matched the criteria
                                     </td>
                                 </tr>
                             ) : (
                                 filteredUsers.map((user) => (
-                                    <tr key={user._id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-black text-white flex items-center justify-center font-bold">
-                                                    {user.name.charAt(0).toUpperCase()}
-                                                </div>
-                                                <div>
-                                                    <div className="font-bold">{user.name}</div>
-                                                    {user.email && (
-                                                        <div className="text-xs text-gray-500 font-mono">{user.email}</div>
-                                                    )}
-                                                </div>
-                                            </div>
+                                    <tr key={user._id} className="hover:bg-slate-50 transition-colors">
+                                        <td className="p-3.5">
+                                            <div className="font-semibold text-slate-900">{user.name}</div>
+                                            {user.email && <div className="text-[11px] text-slate-500">{user.email}</div>}
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <span className="font-mono text-sm bg-gray-100 px-2 py-1 border border-gray-300">
-                                                {user.phone}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-3 py-1 text-xs font-bold uppercase tracking-wider border-2 ${user.role === 'admin'
-                                                ? 'border-red-500 text-red-500 bg-red-50'
-                                                : user.role === 'volunteer'
-                                                    ? 'border-green-500 text-green-500 bg-green-50'
-                                                    : 'border-blue-500 text-blue-500 bg-blue-50'
-                                                }`}>
+                                        <td className="p-3.5 text-slate-600">{user.phone}</td>
+                                        <td className="p-3.5">
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                                user.role === 'admin' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                                                user.role === 'volunteer' ? 'tactical-badge-blue' :
+                                                'bg-slate-100 text-slate-700 border border-slate-200'
+                                            }`}>
                                                 {user.role}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-3 py-1 text-xs font-bold uppercase ${user.status === 'active'
-                                                ? 'bg-green-500 text-white'
-                                                : user.status === 'suspended'
-                                                    ? 'bg-yellow-500 text-black'
-                                                    : 'bg-gray-500 text-white'
-                                                }`}>
+                                        <td className="p-3.5">
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                                user.status === 'active' ? 'tactical-badge-green' : 'tactical-badge-amber'
+                                            }`}>
                                                 {user.status}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 font-mono text-xs">
+                                        <td className="p-3.5 text-slate-500 text-[11px]">
                                             {user.lastLocation?.coordinates ? (
-                                                <span className="text-green-600">
-                                                    📍 {user.lastLocation.coordinates[1].toFixed(2)}°, {user.lastLocation.coordinates[0].toFixed(2)}°
+                                                <span className="text-emerald-600 font-semibold">
+                                                    {user.lastLocation.coordinates[1].toFixed(2)}°, {user.lastLocation.coordinates[0].toFixed(2)}°
                                                 </span>
                                             ) : (
-                                                <span className="text-gray-400">—</span>
+                                                <span className="text-slate-300">—</span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-4 font-mono text-xs text-gray-500">
-                                            {formatDate(user.createdAt)}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="p-3.5 text-slate-500">{formatDate(user.createdAt)}</td>
+                                        <td className="p-3.5 text-right">
                                             <button
                                                 onClick={() => handleDeleteUser(user._id, user.name)}
                                                 disabled={actionLoading === user._id || user.role === 'admin'}
-                                                className={`px-4 py-2 border-2 font-bold text-xs uppercase tracking-wider transition-colors ${user.role === 'admin'
-                                                    ? 'border-gray-300 text-gray-400 cursor-not-allowed'
-                                                    : 'border-red-500 text-red-500 hover:bg-red-500 hover:text-white'
-                                                    }`}
-                                                title={user.role === 'admin' ? 'Cannot delete admin users' : 'Delete user'}
+                                                className={`p-1.5 rounded transition-colors ${
+                                                    user.role === 'admin'
+                                                        ? 'text-slate-300 cursor-not-allowed'
+                                                        : 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                                                }`}
+                                                title={user.role === 'admin' ? 'Cannot remove administrators' : 'Delete user'}
                                             >
-                                                {actionLoading === user._id ? '...' : 'DELETE'}
+                                                <Trash2 className="w-3.5 h-3.5" />
                                             </button>
                                         </td>
                                     </tr>

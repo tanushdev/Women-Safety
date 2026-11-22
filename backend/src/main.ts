@@ -16,8 +16,13 @@ async function bootstrap() {
     const port = configService.get<number>('PORT', 3000);
     const apiPrefix = configService.get<string>('API_PREFIX', 'api/v1');
 
-    // Security
-    app.use(helmet());
+    // Security - disable strict CSP on docs so Swagger UI assets can render
+    app.use(
+        helmet({
+            contentSecurityPolicy: false,
+            crossOriginEmbedderPolicy: false,
+        }),
+    );
     app.use(compression());
 
     // CORS

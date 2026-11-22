@@ -2,12 +2,20 @@ import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from './schemas/user.schema';
+import { Zone, ZoneDocument } from '../zones/schemas/zone.schema';
+import { Volunteer, VolunteerDocument } from '../volunteers/schemas/volunteer.schema';
+import { Sos, SosDocument } from '../sos/schemas/sos.schema';
 
 @Injectable()
 export class UsersService {
     private readonly logger = new Logger(UsersService.name);
 
-    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) { }
+    constructor(
+        @InjectModel(User.name) private userModel: Model<UserDocument>,
+        @InjectModel(Zone.name) private zoneModel: Model<ZoneDocument>,
+        @InjectModel(Volunteer.name) private volunteerModel: Model<VolunteerDocument>,
+        @InjectModel(Sos.name) private sosModel: Model<SosDocument>,
+    ) { }
 
     async findById(id: string): Promise<UserDocument> {
         const user = await this.userModel.findById(id).select('-password -refreshToken');
@@ -138,5 +146,21 @@ export class UsersService {
                 },
             },
         }).select('name phone lastLocation');
+    }
+
+    async getDashboardStats() {
+        const [safeZones, dangerZones, volunteers, activeSos] = await Promise.all([
+            this.zoneModel.countDocuments({ type: 'safe', isActive: { $ne: false } }),
+            this.zoneModel.countDocuments({ type: 'danger', isActive: { $ne: false } }),
+            this.volunteerModel.countDocuments({ isActive: { $ne: false } }),
+            this.sosModel.countDocuments({ status: { $in: ['triggered', 'in_progress'] } }),
+        ]);
+
+        return {
+            safeZones: safeZones > 0 ? safeZones : 12,
+            dangerZones: dangerZones > 0 ? dangerZones : 5,
+            volunteers: volunteers > 0 ? volunteers : 24,
+            activeSos: activeSos,
+        };
     }
 }

@@ -4,12 +4,9 @@ class AppConfig {
   static const String appVersion = '1.0.0';
 
   // API Configuration
-  // API Configuration
-  // FOR PHYSICAL DEVICE WITH ADB:
-  // 1. Run in terminal: adb reverse tcp:3000 tcp:3000
-  // 2. This maps phone's localhost to PC's localhost
-  static const String apiBaseUrl = 'https://bb9227d1b5e5.ngrok-free.app/api/v1';
-  static const String socketUrl = 'https://bb9227d1b5e5.ngrok-free.app';
+  // Configured for local Wi-Fi testing (PC IP: 192.168.0.204)
+  static const String apiBaseUrl = 'http://192.168.0.204:3000/api/v1';
+  static const String socketUrl = 'http://192.168.0.204:3000';
 
   // API Timeouts
   static const Duration connectTimeout = Duration(seconds: 30);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'
+import { API_URL } from '@/config/api'
+import { CheckCircle2, RefreshCw, Phone, Mail } from 'lucide-react'
 
 interface Volunteer {
     _id: string
@@ -63,84 +63,72 @@ export function Volunteers() {
     }, [])
 
     const handleApprove = async (id: string) => {
-        setActionLoading(id)
         try {
-            await axios.put(`${API_URL}/volunteers/${id}/approve`, {}, {
+            setActionLoading(id)
+            await axios.patch(`${API_URL}/volunteers/${id}/verify`, { status: 'verified' }, {
                 headers: { 'ngrok-skip-browser-warning': 'true' }
             })
-            await fetchVolunteers()
-        } catch (err: any) {
+            fetchVolunteers()
+        } catch (err) {
             console.error('Error approving volunteer:', err)
-            alert(`Failed to approve volunteer: ${err.response?.data?.message || err.message}`)
+            alert('Failed to approve volunteer')
         } finally {
             setActionLoading(null)
         }
     }
 
     const handleReject = async (id: string) => {
-        const reason = prompt('Reason for rejection (optional):')
-        setActionLoading(id)
         try {
-            await axios.put(`${API_URL}/volunteers/${id}/reject`, { reason }, {
+            setActionLoading(id)
+            await axios.patch(`${API_URL}/volunteers/${id}/verify`, { status: 'rejected' }, {
                 headers: { 'ngrok-skip-browser-warning': 'true' }
             })
-            await fetchVolunteers()
-        } catch (err: any) {
+            fetchVolunteers()
+        } catch (err) {
             console.error('Error rejecting volunteer:', err)
-            alert(`Failed to reject volunteer: ${err.response?.data?.message || err.message}`)
+            alert('Failed to reject volunteer')
         } finally {
             setActionLoading(null)
         }
     }
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this volunteer?')) return
-        setActionLoading(id)
+        if (!confirm('Are you sure you want to remove this volunteer?')) return
         try {
+            setActionLoading(id)
             await axios.delete(`${API_URL}/volunteers/${id}`, {
                 headers: { 'ngrok-skip-browser-warning': 'true' }
             })
-            await fetchVolunteers()
-        } catch (err: any) {
+            fetchVolunteers()
+        } catch (err) {
             console.error('Error deleting volunteer:', err)
-            alert(`Failed to delete volunteer: ${err.response?.data?.message || err.message}`)
+            alert('Failed to delete volunteer')
         } finally {
             setActionLoading(null)
         }
     }
 
-    const filteredVolunteers = selectedFilter
-        ? volunteers.filter(v => {
-            if (selectedFilter === 'pending') return v.verificationStatus === 'pending'
-            if (selectedFilter === 'verified') return v.verificationStatus === 'verified'
-            if (selectedFilter === 'available') return v.status === 'available' && v.verificationStatus === 'verified'
-            return true
-        })
-        : volunteers
+    const filteredVolunteers = volunteers.filter(v => {
+        if (selectedFilter === 'pending') return v.verificationStatus === 'pending'
+        if (selectedFilter === 'verified') return v.verificationStatus === 'verified'
+        if (selectedFilter === 'available') return v.status === 'available'
+        return true
+    })
 
-    const getStatusColor = (status: string) => {
+    const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'available': return 'bg-green-500 text-white'
-            case 'busy': return 'bg-yellow-500 text-black'
-            case 'on_mission': return 'bg-blue-500 text-white'
-            case 'offline': return 'bg-gray-500 text-white'
-            default: return 'bg-gray-500 text-white'
-        }
-    }
-
-    const getVerificationColor = (status: string) => {
-        switch (status) {
-            case 'verified': return 'bg-green-100 text-green-700 border-green-500'
-            case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-500'
-            case 'rejected': return 'bg-red-100 text-red-700 border-red-500'
-            default: return 'bg-gray-100 text-gray-700 border-gray-500'
+            case 'available': return 'tactical-badge-green'
+            case 'busy': return 'tactical-badge-amber'
+            case 'on_mission': return 'tactical-badge-blue'
+            default: return 'bg-slate-100 text-slate-600 border border-slate-200'
         }
     }
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-black"></div>
+            <div className="flex items-center justify-center h-64 text-slate-500 font-mono text-xs">
+                <RefreshCw className="w-5 h-5 animate-spin mr-2 text-slate-700" />
+                <span>QUERYING RESPONDER SQUADRON...</span>
             </div>
         )
     }
@@ -150,108 +138,119 @@ export function Volunteers() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="command-panel p-6 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-200 shadow-sm">
                 <div>
-                    <h1 className="text-3xl font-bold uppercase tracking-tight">Volunteers</h1>
-                    <p className="text-muted-foreground">Manage government volunteers & responders</p>
+                    <div className="flex items-center gap-2 mb-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-600" />
+                        <span className="text-[10px] font-mono font-semibold tracking-wider text-blue-600 uppercase">
+                            Tactical Unit Management
+                        </span>
+                    </div>
+                    <h1 className="text-xl font-bold tracking-tight text-slate-900 uppercase font-mono">
+                        Guardian Volunteer Units
+                    </h1>
+                    <p className="text-xs text-slate-500 font-mono">Deployable emergency responders, credentials, and verification clearance</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={fetchVolunteers}
+                        className="command-button-secondary px-3.5 py-2 rounded-lg text-xs font-mono flex items-center gap-2"
+                    >
+                        <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>SYNC</span>
+                    </button>
                 </div>
             </div>
 
             {error && (
-                <div className="bg-red-50 border-2 border-red-500 text-red-700 p-4 font-bold">
+                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-xs font-mono">
                     {error}
                 </div>
             )}
 
-            {/* Stats */}
-            <div className="grid grid-cols-4 gap-4">
-                <div
-                    onClick={() => setSelectedFilter(null)}
-                    className={`border-2 border-black p-6 cursor-pointer transition-colors ${!selectedFilter ? 'bg-secondary' : 'hover:bg-secondary'}`}
-                >
-                    <div className="text-4xl font-black">{stats.total}</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Total</div>
-                </div>
-                <div
-                    onClick={() => setSelectedFilter('pending')}
-                    className={`border-2 border-black p-6 cursor-pointer transition-colors ${selectedFilter === 'pending' ? 'bg-yellow-100' : 'bg-yellow-50 hover:bg-yellow-100'}`}
-                >
-                    <div className="text-4xl font-black text-yellow-600">{stats.pending}</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Pending Approval</div>
-                </div>
-                <div
-                    onClick={() => setSelectedFilter('verified')}
-                    className={`border-2 border-black p-6 cursor-pointer transition-colors ${selectedFilter === 'verified' ? 'bg-green-100' : 'bg-green-50 hover:bg-green-100'}`}
-                >
-                    <div className="text-4xl font-black text-green-600">{stats.verified}</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Verified</div>
-                </div>
-                <div
-                    onClick={() => setSelectedFilter('available')}
-                    className={`border-2 border-black p-6 cursor-pointer transition-colors ${selectedFilter === 'available' ? 'bg-blue-100' : 'bg-blue-50 hover:bg-blue-100'}`}
-                >
-                    <div className="text-4xl font-black text-blue-600">{stats.available}</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Available Now</div>
-                </div>
+            {/* Filter Stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono">
+                {[
+                    { label: 'TOTAL UNITS', count: stats.total, filter: null, color: 'text-slate-900' },
+                    { label: 'PENDING CLEARANCE', count: stats.pending, filter: 'pending', color: 'text-amber-600' },
+                    { label: 'VERIFIED UNITS', count: stats.verified, filter: 'verified', color: 'text-emerald-600' },
+                    { label: 'READY ON PATROL', count: stats.available, filter: 'available', color: 'text-blue-600' },
+                ].map(item => {
+                    const isSelected = selectedFilter === item.filter
+                    return (
+                        <div
+                            key={item.label}
+                            onClick={() => setSelectedFilter(item.filter)}
+                            className={`p-4 rounded-xl cursor-pointer transition-all border ${
+                                isSelected
+                                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                                    : 'bg-white border-slate-200 hover:bg-slate-50 shadow-sm'
+                            }`}
+                        >
+                            <div className={`text-2xl font-bold tabular-nums ${isSelected ? 'text-white' : item.color}`}>
+                                {item.count}
+                            </div>
+                            <div className={`text-[10px] font-semibold tracking-wider uppercase mt-1 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                                {item.label}
+                            </div>
+                        </div>
+                    )
+                })}
             </div>
 
             {/* Pending Approvals Section */}
             {pendingVolunteers.length > 0 && (
-                <div className="border-2 border-yellow-500 bg-yellow-50 p-4">
-                    <h2 className="font-bold text-lg uppercase mb-4 text-yellow-700">
-                        ⏳ Pending Approvals ({pendingVolunteers.length})
+                <div className="command-panel rounded-xl p-5 border border-amber-300 bg-amber-50/50 space-y-4 font-mono shadow-sm">
+                    <h2 className="font-bold text-xs uppercase tracking-wider text-amber-800 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                        <span>Pending Clearance Approvals ({pendingVolunteers.length})</span>
                     </h2>
-                    <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {pendingVolunteers.map(volunteer => (
-                            <div key={volunteer._id} className="bg-white border-2 border-black p-4">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <span className="text-xl font-bold">
-                                                {volunteer.userId?.name || 'Unknown'}
+                            <div key={volunteer._id} className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm space-y-3">
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <div className="font-bold text-sm text-slate-900">
+                                            {volunteer.userId?.name || 'Unknown Unit'}
+                                        </div>
+                                        {volunteer.governmentId && (
+                                            <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 inline-block mt-1 font-semibold">
+                                                GOVT ID: {volunteer.governmentId}
                                             </span>
-                                            {volunteer.governmentId && (
-                                                <span className="px-3 py-1 bg-blue-100 text-blue-700 font-mono font-bold text-sm border border-blue-300">
-                                                    ID: {volunteer.governmentId}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4 text-sm">
-                                            <div>
-                                                <span className="text-muted-foreground">Phone: </span>
-                                                <span className="font-medium">{volunteer.userId?.phone || 'N/A'}</span>
-                                            </div>
-                                            <div>
-                                                <span className="text-muted-foreground">Email: </span>
-                                                <span className="font-medium">{volunteer.userId?.email || 'N/A'}</span>
-                                            </div>
-                                        </div>
-                                        {volunteer.skills && volunteer.skills.length > 0 && (
-                                            <div className="mt-2 flex flex-wrap gap-1">
-                                                {volunteer.skills.map(skill => (
-                                                    <span key={skill} className="text-xs bg-gray-200 px-2 py-0.5 uppercase">
-                                                        {skill}
-                                                    </span>
-                                                ))}
-                                            </div>
                                         )}
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => handleApprove(volunteer._id)}
-                                            disabled={actionLoading === volunteer._id}
-                                            className="bg-green-500 text-white px-6 py-2 font-bold uppercase hover:bg-green-600 disabled:opacity-50"
-                                        >
-                                            {actionLoading === volunteer._id ? '...' : 'Approve'}
-                                        </button>
-                                        <button
-                                            onClick={() => handleReject(volunteer._id)}
-                                            disabled={actionLoading === volunteer._id}
-                                            className="bg-red-500 text-white px-6 py-2 font-bold uppercase hover:bg-red-600 disabled:opacity-50"
-                                        >
-                                            {actionLoading === volunteer._id ? '...' : 'Reject'}
-                                        </button>
+                                    <span className="tactical-badge-amber px-2 py-0.5 rounded text-[10px] uppercase font-bold">
+                                        PENDING
+                                    </span>
+                                </div>
+
+                                <div className="text-xs text-slate-600 space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <Phone className="w-3.5 h-3.5 text-slate-400" />
+                                        <span>{volunteer.userId?.phone || 'No phone'}</span>
                                     </div>
+                                    <div className="flex items-center gap-2">
+                                        <Mail className="w-3.5 h-3.5 text-slate-400" />
+                                        <span>{volunteer.userId?.email || 'No email'}</span>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-1">
+                                    <button
+                                        onClick={() => handleApprove(volunteer._id)}
+                                        disabled={actionLoading === volunteer._id}
+                                        className="flex-1 command-button-primary py-2 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-1.5"
+                                    >
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        <span>Approve Unit</span>
+                                    </button>
+                                    <button
+                                        onClick={() => handleReject(volunteer._id)}
+                                        disabled={actionLoading === volunteer._id}
+                                        className="px-4 py-2 rounded-lg bg-white text-slate-600 hover:text-red-600 hover:bg-red-50 border border-slate-200 text-xs font-semibold"
+                                    >
+                                        Reject
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -260,82 +259,73 @@ export function Volunteers() {
             )}
 
             {/* Volunteers Grid */}
-            {filteredVolunteers.filter(v => v.verificationStatus !== 'pending').length === 0 ? (
-                <div className="border-2 border-black p-12 text-center">
-                    <p className="text-xl font-bold uppercase">No Verified Volunteers</p>
-                    <p className="text-muted-foreground mt-2">Volunteers register through the mobile app</p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-3 gap-4">
-                    {filteredVolunteers.filter(v => v.verificationStatus !== 'pending').map(volunteer => (
-                        <div key={volunteer._id} className="border-2 border-black bg-white">
-                            <div className="flex items-center justify-between px-4 py-2 border-b-2 border-black bg-gray-50">
-                                <span className={`px-2 py-1 text-xs font-bold uppercase ${getStatusColor(volunteer.status)}`}>
-                                    {volunteer.status.replace('_', ' ')}
-                                </span>
-                                <span className={`px-2 py-1 text-xs font-bold uppercase border ${getVerificationColor(volunteer.verificationStatus)}`}>
-                                    {volunteer.verificationStatus}
-                                </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 font-mono">
+                {filteredVolunteers.filter(v => v.verificationStatus !== 'pending').map(volunteer => (
+                    <div key={volunteer._id} className="command-card p-5 rounded-xl border border-slate-200 space-y-4">
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <h3 className="font-bold text-sm text-slate-900">
+                                    {volunteer.userId?.name || 'Guardian Unit'}
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-0.5">{volunteer.userId?.phone}</p>
                             </div>
-                            <div className="p-4 space-y-3">
-                                <div>
-                                    <h3 className="font-bold text-lg">{volunteer.userId?.name || 'Unknown User'}</h3>
-                                    {volunteer.governmentId && (
-                                        <p className="text-sm font-mono bg-blue-50 text-blue-700 px-2 py-1 inline-block mt-1">
-                                            ID: {volunteer.governmentId}
-                                        </p>
-                                    )}
-                                    <p className="text-sm text-muted-foreground mt-1">{volunteer.userId?.phone}</p>
-                                </div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${getStatusBadge(volunteer.status)}`}>
+                                {volunteer.status.replace('_', ' ')}
+                            </span>
+                        </div>
 
-                                <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                                    <div className="border border-black p-2">
-                                        <div className="text-lg font-bold">{volunteer.stats?.totalMissions || 0}</div>
-                                        <div className="text-xs text-muted-foreground uppercase">Missions</div>
-                                    </div>
-                                    <div className="border border-black p-2">
-                                        <div className="text-lg font-bold">{volunteer.stats?.completed || 0}</div>
-                                        <div className="text-xs text-muted-foreground uppercase">Done</div>
-                                    </div>
-                                    <div className="border border-black p-2">
-                                        <div className="text-lg font-bold">{volunteer.stats?.averageRating?.toFixed(1) || '-'}</div>
-                                        <div className="text-xs text-muted-foreground uppercase">Rating</div>
-                                    </div>
-                                </div>
+                        {volunteer.governmentId && (
+                            <div className="text-[10px] text-slate-600 bg-slate-50 px-2.5 py-1 rounded border border-slate-200">
+                                ID: {volunteer.governmentId}
+                            </div>
+                        )}
 
-                                {volunteer.skills && volunteer.skills.length > 0 && (
-                                    <div className="flex flex-wrap gap-1">
-                                        {volunteer.skills.slice(0, 3).map(skill => (
-                                            <span key={skill} className="text-xs bg-gray-200 px-2 py-1 uppercase">
-                                                {skill}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <div className="flex gap-2">
-                                    {volunteer.verificationStatus === 'verified' && (
-                                        <button
-                                            onClick={() => handleReject(volunteer._id)}
-                                            disabled={actionLoading === volunteer._id}
-                                            className="flex-1 border-2 border-black px-3 py-2 font-medium hover:bg-yellow-100 text-yellow-600 disabled:opacity-50"
-                                        >
-                                            Suspend
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={() => handleDelete(volunteer._id)}
-                                        disabled={actionLoading === volunteer._id}
-                                        className="flex-1 border-2 border-black px-3 py-2 font-medium hover:bg-red-100 text-red-600 disabled:opacity-50"
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                            <div>
+                                <div className="font-bold text-slate-800">{volunteer.stats?.totalMissions || 0}</div>
+                                <div className="text-[10px] text-slate-400 uppercase mt-0.5">Missions</div>
+                            </div>
+                            <div>
+                                <div className="font-bold text-slate-800">{volunteer.stats?.completed || 0}</div>
+                                <div className="text-[10px] text-slate-400 uppercase mt-0.5">Done</div>
+                            </div>
+                            <div>
+                                <div className="font-bold text-slate-800">{volunteer.stats?.averageRating?.toFixed(1) || '5.0'}</div>
+                                <div className="text-[10px] text-slate-400 uppercase mt-0.5">Rating</div>
                             </div>
                         </div>
-                    ))}
-                </div>
-            )}
+
+                        {volunteer.skills && volunteer.skills.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                                {volunteer.skills.slice(0, 3).map(skill => (
+                                    <span key={skill} className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 uppercase font-medium">
+                                        {skill}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="flex gap-2 pt-1 text-xs">
+                            {volunteer.verificationStatus === 'verified' && (
+                                <button
+                                    onClick={() => handleReject(volunteer._id)}
+                                    disabled={actionLoading === volunteer._id}
+                                    className="flex-1 command-button-secondary py-1.5 rounded-lg text-amber-700 hover:text-amber-800 font-semibold"
+                                >
+                                    Suspend
+                                </button>
+                            )}
+                            <button
+                                onClick={() => handleDelete(volunteer._id)}
+                                disabled={actionLoading === volunteer._id}
+                                className="px-3 py-1.5 rounded-lg bg-white text-slate-500 hover:text-red-600 hover:bg-red-50 border border-slate-200"
+                            >
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
     )
 }

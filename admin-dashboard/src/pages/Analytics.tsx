@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'
+import { API_URL } from '@/config/api'
+import { RefreshCw } from 'lucide-react'
 
 interface SosStats {
     total: number
@@ -25,35 +25,30 @@ export function Analytics() {
     const [incidents, setIncidents] = useState<SosIncident[]>([])
     const [loading, setLoading] = useState(true)
 
-    useEffect(() => {
-        const fetchData = async () => {
-            const headers = { 'ngrok-skip-browser-warning': 'true' }
-            try {
-                const [statsRes, incidentsRes] = await Promise.all([
-                    axios.get(`${API_URL}/sos/stats`, { headers }),
-                    axios.get(`${API_URL}/sos`, { headers })
-                ])
-                setStats(statsRes.data || { total: 0, active: 0, resolved: 0, cancelled: 0 })
-                const data = Array.isArray(incidentsRes.data) ? incidentsRes.data : []
-                setIncidents(data)
-            } catch (err) {
-                console.error('Error fetching analytics:', err)
-            } finally {
-                setLoading(false)
-            }
+    const fetchData = async () => {
+        const headers = { 'ngrok-skip-browser-warning': 'true' }
+        try {
+            setLoading(true)
+            const [statsRes, incidentsRes] = await Promise.all([
+                axios.get(`${API_URL}/sos/stats`, { headers }),
+                axios.get(`${API_URL}/sos`, { headers })
+            ])
+            setStats(statsRes.data || { total: 0, active: 0, resolved: 0, cancelled: 0 })
+            const data = Array.isArray(incidentsRes.data) ? incidentsRes.data : []
+            setIncidents(data)
+        } catch (err) {
+            console.error('Error fetching analytics:', err)
+        } finally {
+            setLoading(false)
         }
+    }
+
+    useEffect(() => {
         fetchData()
     }, [])
 
-    // Calculate real analytics from incidents data
-    const incidentsByStatus = [
-        { status: 'Triggered', count: incidents.filter(i => i.status === 'TRIGGERED').length, color: 'bg-red-500' },
-        { status: 'In Progress', count: incidents.filter(i => i.status === 'IN_PROGRESS').length, color: 'bg-blue-500' },
-        { status: 'Resolved', count: incidents.filter(i => i.status === 'RESOLVED').length, color: 'bg-green-500' },
-        { status: 'Cancelled', count: incidents.filter(i => i.status === 'CANCELLED').length, color: 'bg-gray-500' },
-    ]
 
-    // Group incidents by day of week
+
     const weeklyData = (() => {
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
         const counts = Array(7).fill(0)
@@ -66,13 +61,12 @@ export function Analytics() {
 
     const maxWeeklyCount = Math.max(...weeklyData.map(d => d.count), 1)
 
-    // Group by time of day
     const timeDistribution = (() => {
         const slots = [
-            { time: '00:00-06:00', count: 0, color: 'bg-indigo-500' },
-            { time: '06:00-12:00', count: 0, color: 'bg-yellow-500' },
-            { time: '12:00-18:00', count: 0, color: 'bg-orange-500' },
-            { time: '18:00-00:00', count: 0, color: 'bg-red-500' },
+            { time: '00:00 – 06:00', label: 'Night Shift', count: 0, color: 'bg-indigo-500' },
+            { time: '06:00 – 12:00', label: 'Morning Peak', count: 0, color: 'bg-sky-500' },
+            { time: '12:00 – 18:00', label: 'Afternoon', count: 0, color: 'bg-amber-500' },
+            { time: '18:00 – 00:00', label: 'Evening Transit', count: 0, color: 'bg-rose-500' },
         ]
         incidents.forEach(i => {
             const hour = new Date(i.createdAt).getHours()
@@ -84,12 +78,14 @@ export function Analytics() {
         return slots
     })()
 
+    const maxTimeCount = Math.max(...timeDistribution.map(d => d.count), 1)
     const resolutionRate = stats.total > 0 ? ((stats.resolved / stats.total) * 100).toFixed(0) : 0
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="text-xl font-bold">Loading analytics...</div>
+            <div className="flex items-center justify-center h-64 text-slate-400 font-mono text-xs">
+                <RefreshCw className="w-5 h-5 animate-spin mr-2 text-rose-500" />
+                <span>AGGREGATING THREAT INTELLIGENCE...</span>
             </div>
         )
     }
@@ -97,149 +93,109 @@ export function Analytics() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="command-panel p-5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-white/[0.08]">
                 <div>
-                    <h1 className="text-3xl font-bold uppercase tracking-tight">Analytics</h1>
-                    <p className="text-muted-foreground">Real-time statistics from database</p>
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="w-2 h-2 rounded-full bg-purple-500" />
+                        <span className="text-[10px] font-mono font-semibold tracking-wider text-purple-400 uppercase">
+                            Quantitative Intelligence
+                        </span>
+                    </div>
+                    <h1 className="text-xl font-bold tracking-tight text-white uppercase font-mono">
+                        Threat & Resolution Analytics
+                    </h1>
+                    <p className="text-xs text-slate-400 font-mono">Pattern detection, temporal incident clustering, and emergency response latency</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-3">
                     <button
-                        onClick={() => window.location.reload()}
-                        className="bg-black text-white border-2 border-black px-6 py-2 font-bold uppercase hover:bg-gray-800 transition-colors"
+                        onClick={fetchData}
+                        className="command-button-secondary px-3.5 py-2 rounded-lg text-xs font-mono flex items-center gap-2"
                     >
-                        ↻ Refresh
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>RECALCULATE</span>
                     </button>
                 </div>
             </div>
 
             {/* Key Metrics */}
-            <div className="grid grid-cols-4 gap-4">
-                <div className="border-2 border-black p-6">
-                    <div className="text-4xl font-black">{stats.total}</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Total Incidents</div>
-                    <div className="text-muted-foreground text-sm mt-2">All time</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-mono">
+                <div className="command-card p-5 rounded-xl border border-white/[0.08]">
+                    <div className="text-3xl font-bold text-white tabular-nums">{stats.total}</div>
+                    <div className="text-xs text-slate-300 font-medium mt-1">Total Signals Logged</div>
+                    <div className="text-[10px] text-slate-400 mt-2">Cumulative database audit</div>
                 </div>
-                <div className="border-2 border-black p-6 bg-green-50">
-                    <div className="text-4xl font-black text-green-600">{resolutionRate}%</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Resolution Rate</div>
-                    <div className="text-muted-foreground text-sm mt-2">{stats.resolved} resolved</div>
+                <div className="command-card p-5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03]">
+                    <div className="text-3xl font-bold text-emerald-400 tabular-nums">{resolutionRate}%</div>
+                    <div className="text-xs text-slate-300 font-medium mt-1">Resolution Efficiency</div>
+                    <div className="text-[10px] text-slate-400 mt-2">{stats.resolved} of {stats.total} resolved</div>
                 </div>
-                <div className="border-2 border-black p-6 bg-red-50">
-                    <div className="text-4xl font-black text-red-600">{stats.active}</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Active Incidents</div>
-                    <div className="text-muted-foreground text-sm mt-2">Needs attention</div>
+                <div className="command-card p-5 rounded-xl border border-red-500/20 bg-red-500/[0.03]">
+                    <div className="text-3xl font-bold text-rose-400 tabular-nums">{stats.active}</div>
+                    <div className="text-xs text-slate-300 font-medium mt-1">Active Distress Incidents</div>
+                    <div className="text-[10px] text-slate-400 mt-2">Pending final closure</div>
                 </div>
-                <div className="border-2 border-black p-6 bg-gray-50">
-                    <div className="text-4xl font-black text-gray-600">{stats.cancelled}</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Cancelled</div>
-                    <div className="text-muted-foreground text-sm mt-2">False alarms</div>
+                <div className="command-card p-5 rounded-xl border border-white/[0.08]">
+                    <div className="text-3xl font-bold text-slate-300 tabular-nums">{stats.cancelled}</div>
+                    <div className="text-xs text-slate-300 font-medium mt-1">False / Cancelled Alarms</div>
+                    <div className="text-[10px] text-slate-400 mt-2">Dismissed by user</div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
-                {/* Incidents by Status */}
-                <div className="border-2 border-black">
-                    <div className="bg-black text-white p-4 border-b-2 border-black">
-                        <h2 className="font-bold uppercase">Incidents by Status</h2>
+            {/* Charts Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 font-mono">
+                {/* Weekly Temporal Distribution */}
+                <div className="command-panel p-5 rounded-xl border border-white/[0.08] space-y-4">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-xs font-bold uppercase tracking-wider text-white">
+                            Weekly Incident Frequency
+                        </h2>
+                        <span className="text-[10px] text-slate-400">7-Day Aggregation</span>
                     </div>
-                    <div className="p-6 space-y-4">
-                        {incidentsByStatus.map(item => (
-                            <div key={item.status} className="space-y-1">
-                                <div className="flex justify-between text-sm">
-                                    <span className="font-medium">{item.status}</span>
-                                    <span className="font-bold">{item.count}</span>
-                                </div>
-                                <div className="h-4 bg-secondary border border-black">
-                                    <div
-                                        className={`h-full ${item.color}`}
-                                        style={{ width: `${stats.total > 0 ? (item.count / stats.total) * 100 : 0}%` }}
+
+                    <div className="h-56 flex items-end gap-3 pt-6 pb-2">
+                        {weeklyData.map((d) => {
+                            const heightPct = Math.max((d.count / maxWeeklyCount) * 100, 8)
+                            return (
+                                <div key={d.day} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                                    <span className="text-[11px] text-slate-400 tabular-nums">{d.count}</span>
+                                    <div 
+                                        className="w-full bg-slate-800 hover:bg-rose-500/80 rounded-t transition-all duration-300 border-t border-rose-500/40"
+                                        style={{ height: `${heightPct}%` }}
                                     />
+                                    <span className="text-[11px] text-slate-400 uppercase">{d.day}</span>
                                 </div>
-                            </div>
-                        ))}
-                        {stats.total === 0 && (
-                            <div className="text-center text-muted-foreground py-4">
-                                No incident data yet. Trigger SOS from mobile app.
-                            </div>
-                        )}
+                            )
+                        })}
                     </div>
                 </div>
 
-                {/* Weekly Trend */}
-                <div className="border-2 border-black">
-                    <div className="bg-black text-white p-4 border-b-2 border-black">
-                        <h2 className="font-bold uppercase">Weekly Distribution</h2>
+                {/* Diurnal Time Slot Distribution */}
+                <div className="command-panel p-5 rounded-xl border border-white/[0.08] space-y-4">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-xs font-bold uppercase tracking-wider text-white">
+                            Time-of-Day Risk Clustering
+                        </h2>
+                        <span className="text-[10px] text-slate-400">24h Diurnal Spread</span>
                     </div>
-                    <div className="p-6">
-                        <div className="flex items-end justify-between h-48 gap-2">
-                            {weeklyData.map((item) => (
-                                <div key={item.day} className="flex-1 flex flex-col items-center gap-2">
-                                    <span className="text-xs font-bold">{item.count}</span>
-                                    <div
-                                        className="w-full bg-black transition-all hover:bg-gray-700"
-                                        style={{ height: `${item.count > 0 ? (item.count / maxWeeklyCount) * 100 : 5}%`, minHeight: '4px' }}
-                                    />
-                                    <span className="text-xs font-medium">{item.day}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
 
-                {/* Time Distribution */}
-                <div className="border-2 border-black">
-                    <div className="bg-black text-white p-4 border-b-2 border-black">
-                        <h2 className="font-bold uppercase">Time Distribution</h2>
-                    </div>
-                    <div className="p-6 space-y-4">
-                        {timeDistribution.map(item => (
-                            <div key={item.time} className="flex items-center gap-4">
-                                <span className="w-28 text-sm font-medium">{item.time}</span>
-                                <div className="flex-1 h-6 bg-secondary border border-black">
-                                    <div
-                                        className={`h-full ${item.color} flex items-center justify-end pr-2`}
-                                        style={{ width: `${stats.total > 0 ? (item.count / stats.total) * 100 : 0}%` }}
-                                    >
-                                        {item.count > 0 && <span className="text-white text-xs font-bold">{item.count}</span>}
+                    <div className="space-y-4 pt-2">
+                        {timeDistribution.map(slot => {
+                            const widthPct = Math.max((slot.count / maxTimeCount) * 100, 4)
+                            return (
+                                <div key={slot.time} className="space-y-1.5">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="text-slate-300 font-semibold">{slot.time} <span className="text-slate-400 font-normal">({slot.label})</span></span>
+                                        <span className="text-slate-400 font-bold">{slot.count} incidents</span>
+                                    </div>
+                                    <div className="h-2.5 w-full bg-slate-900 rounded-full overflow-hidden border border-white/[0.04]">
+                                        <div 
+                                            className={`h-full ${slot.color} transition-all duration-500`}
+                                            style={{ width: `${widthPct}%` }}
+                                        />
                                     </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Quick Stats */}
-                <div className="border-2 border-black">
-                    <div className="bg-black text-white p-4 border-b-2 border-black">
-                        <h2 className="font-bold uppercase">Quick Stats</h2>
-                    </div>
-                    <div className="p-6">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="border-2 border-black p-4 bg-green-50">
-                                <div className="text-3xl font-black text-green-600">{stats.resolved}</div>
-                                <div className="text-sm font-medium uppercase">Resolved</div>
-                            </div>
-                            <div className="border-2 border-black p-4 bg-red-50">
-                                <div className="text-3xl font-black text-red-600">{stats.active}</div>
-                                <div className="text-sm font-medium uppercase">Active</div>
-                            </div>
-                        </div>
-
-                        <div className="mt-4 p-4 bg-secondary border-2 border-black">
-                            <div className="font-bold mb-2">Summary</div>
-                            <div className="text-sm space-y-1">
-                                <div>• {stats.total} total incidents recorded</div>
-                                <div>• {resolutionRate}% resolution rate</div>
-                                <div>• {stats.active} requiring attention</div>
-                            </div>
-                        </div>
-
-                        {incidents.length === 0 && (
-                            <div className="mt-4 p-4 bg-yellow-50 border-2 border-yellow-500 text-yellow-800">
-                                <div className="font-bold">No Data Yet</div>
-                                <div className="text-sm">Trigger SOS from the mobile app to generate real incident data.</div>
-                            </div>
-                        )}
+                            )
+                        })}
                     </div>
                 </div>
             </div>

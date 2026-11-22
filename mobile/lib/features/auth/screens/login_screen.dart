@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../shared/theme/app_theme.dart';
 
@@ -14,6 +15,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _phoneController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -24,186 +26,294 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _login() async {
     final phone = _phoneController.text.trim();
     if (phone.length < 10) {
+      HapticFeedback.lightImpact();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid phone number')),
+        SnackBar(
+          content: Text(
+            'Please enter a valid 10-digit mobile number',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
       );
       return;
     }
 
-    // Call login directly (no OTP)
-    // Prepend +91 as backend expects international format
-    final formattedPhone = '+91$phone'; 
+    setState(() => _isLoading = true);
+    HapticFeedback.mediumImpact();
+
+    final formattedPhone = '+91$phone';
     final success = await ref.read(authProvider.notifier).login(formattedPhone);
-    if (success && mounted) {
-      context.go('/home');
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (success) {
+        context.go('/home');
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
-
-    // Show error messages
     ref.listen<AuthState>(authProvider, (previous, next) {
       if (next.error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(next.error!), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(
+              next.error!,
+              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+            ),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
         );
         ref.read(authProvider.notifier).clearError();
       }
     });
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 40),
-              
-              // Logo or Icon
+              const SizedBox(height: 30),
+
+              // 💎 Top Decorative Badge
               Center(
                 child: Container(
-                  width: 100,
-                  height: 100,
+                  width: 96,
+                  height: 96,
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(20),
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFFF337F),
+                        Color(0xFFFF2D78),
+                        Color(0xFFE11D48),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF2D78).withValues(alpha: 0.35),
+                        blurRadius: 28,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
-                  child: const Icon(
-                    Icons.shield,
-                    size: 50,
-                    color: Colors.white,
+                  child: Center(
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.2),
+                      ),
+                      child: const Icon(
+                        Icons.shield_rounded,
+                        size: 32,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 36),
 
-              // Title
-              const Text(
-                'Welcome to\nWomen Safety',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                  height: 1.2,
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              Text(
-                'Enter your phone number to login',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-
-              const SizedBox(height: 40),
-
-              // Phone Input
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+              // Title and Subtitle
+              Center(
+                child: Column(
+                  children: [
+                    Text(
+                      'Welcome to Guardian',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF0F172A),
+                        letterSpacing: -0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Personal safety, continuous live radar & instant SOS',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF64748B),
+                        height: 1.4,
+                      ),
                     ),
                   ],
                 ),
-                child: TextField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(10),
+              ),
+
+              const SizedBox(height: 40),
+
+              // 💎 Ceramic Login Card
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
                   ],
-                  style: const TextStyle(fontSize: 18),
-                  decoration: InputDecoration(
-                    hintText: 'Mobile Number',
-                    prefixIcon: Container(
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Mobile Number',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF334155),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text(
-                            '+91',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            child: Text(
+                              '🇮🇳 +91',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF0F172A),
+                              ),
                             ),
                           ),
-                          Container(
-                            height: 24,
-                            width: 1,
-                            margin: const EdgeInsets.symmetric(horizontal: 12),
-                            color: AppColors.disabled,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _phoneController,
+                              keyboardType: TextInputType.phone,
+                              maxLength: 10,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF0F172A),
+                                letterSpacing: 0.5,
+                              ),
+                              decoration: InputDecoration(
+                                hintText: 'Enter 10-digit number',
+                                counterText: '',
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                hintStyle: GoogleFonts.plusJakartaSans(
+                                  color: const Color(0xFF94A3B8),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                  ),
-                ),
-              ),
+                    const SizedBox(height: 20),
 
-              const SizedBox(height: 24),
-
-              // Login Button
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: authState.isLoading ? null : _login,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: authState.isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text(
-                          'Login',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                    // Sign In Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF2D78),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
                           ),
                         ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Continue with Guardian',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.arrow_forward_rounded, size: 18),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
-              const Spacer(),
+              const SizedBox(height: 30),
 
-              // Terms
+              // Bottom Security Assurances
               Center(
-                child: Text(
-                  'By continuing, you agree to our Terms of Service\nand Privacy Policy',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.textHint,
-                    fontSize: 12,
-                  ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.lock_outline_rounded, size: 14, color: Color(0xFF10B981)),
+                        const SizedBox(width: 6),
+                        Text(
+                          '256-Bit Encrypted Telemetry • 24/7 Operations',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'By continuing you agree to Emergency Dispatch Protocol',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

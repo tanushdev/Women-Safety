@@ -15,6 +15,12 @@ export class UsersController {
         return this.usersService.findAll();
     }
 
+    @Get('dashboard-stats')
+    @ApiOperation({ summary: 'Get dynamic summary stats for dashboard/home' })
+    async getDashboardStats() {
+        return this.usersService.getDashboardStats();
+    }
+
     // IMPORTANT: /me routes MUST come BEFORE /:id routes to avoid conflicts
     @Get('me')
     @UseGuards(JwtAuthGuard)

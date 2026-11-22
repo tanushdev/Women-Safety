@@ -9,6 +9,13 @@ import '../../features/map/screens/map_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/contacts/screens/contacts_screen.dart';
 import '../../features/volunteer/screens/volunteer_screen.dart';
+import '../../features/notifications/screens/notifications_screen.dart';
+import '../../features/deadmans_switch/screens/deadmans_switch_screen.dart';
+import '../../features/journey/screens/journey_screen.dart';
+import '../../features/fake_call/screens/fake_call_screen.dart';
+import '../../features/stealth/screens/calc_screen.dart';
+import '../../features/reports/screens/report_incident_screen.dart';
+import '../../features/history/screens/incident_history_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -64,6 +71,41 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/volunteer',
         name: 'volunteer',
         builder: (context, state) => const VolunteerScreen(),
+      ),
+      GoRoute(
+        path: '/notifications',
+        name: 'notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/safety-timer',
+        name: 'safety-timer',
+        builder: (context, state) => const DeadMansSwitchScreen(),
+      ),
+      GoRoute(
+        path: '/journey',
+        name: 'journey',
+        builder: (context, state) => const JourneyScreen(),
+      ),
+      GoRoute(
+        path: '/fake-call',
+        name: 'fake-call',
+        builder: (context, state) => const FakeCallScreen(),
+      ),
+      GoRoute(
+        path: '/stealth-calc',
+        name: 'stealth-calc',
+        builder: (context, state) => const CalcScreen(),
+      ),
+      GoRoute(
+        path: '/report-incident',
+        name: 'report-incident',
+        builder: (context, state) => const ReportIncidentScreen(),
+      ),
+      GoRoute(
+        path: '/history',
+        name: 'history',
+        builder: (context, state) => const IncidentHistoryScreen(),
       ),
     ],
   );

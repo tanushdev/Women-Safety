@@ -153,4 +153,44 @@ class ApiService {
   Future<Response> getAllUsers() async {
     return _dio.get('/users');
   }
+
+  // Dashboard Stats
+  Future<Response> getDashboardStats() async {
+    return _dio.get('/users/dashboard-stats');
+  }
+
+  // Notifications
+  Future<Response> getNotifications() async {
+    return _dio.get('/notifications');
+  }
+
+  // Journey Guard
+  Future<Response> startJourney(Map<String, dynamic> data) async {
+    return _dio.post('/journey/start', data: data);
+  }
+
+  Future<Response> updateJourneyLocation(String shareToken, double lat, double lng) async {
+    return _dio.patch('/journey/location/$shareToken', data: {
+      'coordinates': [lng, lat],
+    });
+  }
+
+  Future<Response> markJourneyArrived(String shareToken) async {
+    return _dio.post('/journey/arrive/$shareToken');
+  }
+
+  // Reports
+  Future<Response> createIncidentReport(Map<String, dynamic> data) async {
+    return _dio.post('/reports/incident', data: data);
+  }
+
+  // Incident History
+  Future<Response> getMyIncidentHistory() async {
+    return _dio.get('/sos/my-history');
+  }
+
+  // Dead Man Switch
+  Future<Response> armDeadMansSwitch(int durationMinutes) async {
+    return _dio.post('/sos/deadmans-switch', data: {'durationMinutes': durationMinutes});
+  }
 }

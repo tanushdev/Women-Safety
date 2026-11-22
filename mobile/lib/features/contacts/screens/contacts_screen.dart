@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
 import '../../../core/services/api_service.dart';
 import '../../../shared/theme/app_theme.dart';
 
@@ -111,7 +112,23 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
       final List<dynamic> data = response.data is List ? response.data : response.data['contacts'] ?? [];
       final contacts = data.map((c) => EmergencyContact.fromJson(c)).toList();
       state = state.copyWith(contacts: contacts, isLoading: false);
+
+      // Cache to Hive for offline access
+      try {
+        final box = await Hive.openBox('emergency_contacts');
+        await box.put('cached_contacts', contacts.map((c) => c.toJson()).toList());
+      } catch (_) {}
     } catch (e) {
+      // Offline fallback: load from local cache
+      try {
+        final box = await Hive.openBox('emergency_contacts');
+        final cached = box.get('cached_contacts');
+        if (cached is List && cached.isNotEmpty) {
+          final contacts = cached.map((c) => EmergencyContact.fromJson(Map<String, dynamic>.from(c))).toList();
+          state = state.copyWith(contacts: contacts, isLoading: false);
+          return;
+        }
+      } catch (_) {}
       state = state.copyWith(isLoading: false, error: 'Failed to load contacts');
     }
   }
@@ -119,9 +136,15 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
   Future<bool> saveContacts() async {
     state = state.copyWith(isLoading: true);
     try {
-      await _apiService.updateEmergencyContacts(
-        state.contacts.map((c) => c.toJson()).toList(),
-      );
+      final contactsJson = state.contacts.map((c) => c.toJson()).toList();
+      await _apiService.updateEmergencyContacts(contactsJson);
+
+      // Cache locally
+      try {
+        final box = await Hive.openBox('emergency_contacts');
+        await box.put('cached_contacts', contactsJson);
+      } catch (_) {}
+
       state = state.copyWith(isLoading: false);
       return true;
     } catch (e) {
@@ -165,6 +188,7 @@ class ContactsScreen extends ConsumerWidget {
     final contactsState = ref.watch(contactsProvider);
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Emergency Contacts'),
         actions: [
@@ -174,7 +198,10 @@ class ContactsScreen extends ConsumerWidget {
               child: SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.primary,
+                ),
               ),
             ),
         ],
@@ -182,9 +209,10 @@ class ContactsScreen extends ConsumerWidget {
       body: contactsState.contacts.isEmpty && !contactsState.isLoading
           ? _buildEmptyState(context, ref)
           : RefreshIndicator(
+              color: AppColors.primary,
               onRefresh: () => ref.read(contactsProvider.notifier).loadContacts(),
               child: ListView.builder(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 itemCount: contactsState.contacts.length,
                 itemBuilder: (context, index) {
                   final contact = contactsState.contacts[index];
@@ -194,181 +222,239 @@ class ContactsScreen extends ConsumerWidget {
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddContactDialog(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Contact'),
+        icon: const Icon(Icons.add_rounded),
+        label: const Text(
+          'Add Contact',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(50),
+        ),
       ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context, WidgetRef ref) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.contacts_outlined,
-            size: 80,
-            color: AppColors.textHint,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'No Emergency Contacts',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.contacts_outlined,
+                size: 40,
+                color: AppColors.primary,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Add contacts who will be notified\nvia SMS and WhatsApp during an SOS',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => _showAddContactDialog(context, ref),
-            icon: const Icon(Icons.add),
-            label: const Text('Add Contact'),
-          ),
-        ],
+            const SizedBox(height: 24),
+            const Text(
+              'No Emergency Contacts',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Add contacts who will be notified\nvia SMS and WhatsApp during an SOS',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () => _showAddContactDialog(context, ref),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add Contact'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildContactCard(BuildContext context, WidgetRef ref, EmergencyContact contact) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: contact.isPrimary
-                  ? AppColors.primary.withOpacity(0.1)
-                  : AppColors.textHint.withOpacity(0.1),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: contact.isPrimary
+                  ? AppColors.primaryLight
+                  : const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Center(
               child: Text(
                 contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: contact.isPrimary ? AppColors.primary : AppColors.textSecondary,
                 ),
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          contact.name,
-                          style: const TextStyle(
-                            fontSize: 16,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        contact.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (contact.isPrimary) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight,
+                          borderRadius: BorderRadius.circular(50),
+                        ),
+                        child: const Text(
+                          'Primary',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.primary,
                             fontWeight: FontWeight.w600,
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (contact.isPrimary) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            'Primary',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    contact.phone,
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                  Row(
-                    children: [
-                      Text(
-                        contact.relationship,
-                        style: TextStyle(fontSize: 12, color: AppColors.textHint),
-                      ),
-                      if (contact.whatsappEnabled) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.chat, size: 14, color: Colors.green.shade600),
-                        const SizedBox(width: 2),
-                        Text(
-                          'WhatsApp',
-                          style: TextStyle(fontSize: 10, color: Colors.green.shade600),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                switch (value) {
-                  case 'primary':
-                    ref.read(contactsProvider.notifier).setPrimary(contact.id);
-                    break;
-                  case 'edit':
-                    _showEditContactDialog(context, ref, contact);
-                    break;
-                  case 'delete':
-                    _showDeleteConfirmation(context, ref, contact);
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                if (!contact.isPrimary)
-                  const PopupMenuItem(
-                    value: 'primary',
-                    child: Row(
-                      children: [
-                        Icon(Icons.star, size: 20),
-                        SizedBox(width: 12),
-                        Text('Set as Primary'),
-                      ],
-                    ),
-                  ),
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit, size: 20),
-                      SizedBox(width: 12),
-                      Text('Edit'),
-                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  contact.phone,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
                   ),
                 ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete, size: 20, color: Colors.red),
-                      SizedBox(width: 12),
-                      Text('Delete', style: TextStyle(color: Colors.red)),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(
+                      contact.relationship,
+                      style: const TextStyle(fontSize: 12, color: AppColors.textHint),
+                    ),
+                    if (contact.whatsappEnabled) ...[
+                      const SizedBox(width: 8),
+                      Icon(Icons.chat_rounded, size: 13, color: Colors.green.shade600),
+                      const SizedBox(width: 3),
+                      Text(
+                        'WhatsApp',
+                        style: TextStyle(fontSize: 10, color: Colors.green.shade600),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: AppColors.textSecondary),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            onSelected: (value) {
+              switch (value) {
+                case 'primary':
+                  ref.read(contactsProvider.notifier).setPrimary(contact.id);
+                  break;
+                case 'edit':
+                  _showEditContactDialog(context, ref, contact);
+                  break;
+                case 'delete':
+                  _showDeleteConfirmation(context, ref, contact);
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              if (!contact.isPrimary)
+                const PopupMenuItem(
+                  value: 'primary',
+                  child: Row(
+                    children: [
+                      Icon(Icons.star_rounded, size: 20, color: AppColors.primary),
+                      SizedBox(width: 12),
+                      Text('Set as Primary'),
+                    ],
+                  ),
+                ),
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_rounded, size: 20),
+                    SizedBox(width: 12),
+                    Text('Edit'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_rounded, size: 20, color: Colors.red),
+                    SizedBox(width: 12),
+                    Text('Delete', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -382,6 +468,10 @@ class ContactsScreen extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => Padding(
           padding: EdgeInsets.only(
@@ -393,15 +483,28 @@ class ContactsScreen extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: AppColors.disabled,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
                 const Text(
                   'Add Emergency Contact',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
+                const SizedBox(height: 6),
+                const Text(
                   'This contact will receive alerts during SOS',
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
                 ),
@@ -410,7 +513,7 @@ class ContactsScreen extends ConsumerWidget {
                   controller: nameController,
                   decoration: const InputDecoration(
                     labelText: 'Name',
-                    prefixIcon: Icon(Icons.person_outline),
+                    prefixIcon: Icon(Icons.person_outline_rounded),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -432,7 +535,7 @@ class ContactsScreen extends ConsumerWidget {
                   value: relationship,
                   decoration: const InputDecoration(
                     labelText: 'Relationship',
-                    prefixIcon: Icon(Icons.people_outline),
+                    prefixIcon: Icon(Icons.people_outline_rounded),
                   ),
                   items: ['Family', 'Friend', 'Colleague', 'Neighbor', 'Other']
                       .map((r) => DropdownMenuItem(value: r, child: Text(r)))
@@ -446,14 +549,17 @@ class ContactsScreen extends ConsumerWidget {
                   title: const Text('Enable WhatsApp alerts'),
                   subtitle: const Text('Send location via WhatsApp'),
                   value: whatsappEnabled,
+                  activeColor: AppColors.primary,
                   onChanged: (value) {
                     setState(() => whatsappEnabled = value);
                   },
-                  secondary: Icon(Icons.chat, color: Colors.green.shade600),
+                  secondary: Icon(Icons.chat_rounded, color: Colors.green.shade600),
+                  contentPadding: EdgeInsets.zero,
                 ),
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
+                  height: 52,
                   child: ElevatedButton(
                     onPressed: () {
                       if (nameController.text.isNotEmpty &&
@@ -477,6 +583,11 @@ class ContactsScreen extends ConsumerWidget {
                         );
                       }
                     },
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
                     child: const Text('Add Contact'),
                   ),
                 ),
@@ -499,6 +610,10 @@ class ContactsScreen extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => Padding(
           padding: EdgeInsets.only(
@@ -510,16 +625,32 @@ class ContactsScreen extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: AppColors.disabled,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
                 const Text(
                   'Edit Contact',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 TextField(
                   controller: nameController,
                   decoration: const InputDecoration(
                     labelText: 'Name',
-                    prefixIcon: Icon(Icons.person_outline),
+                    prefixIcon: Icon(Icons.person_outline_rounded),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -538,12 +669,12 @@ class ContactsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: ['Family', 'Friend', 'Colleague', 'Neighbor', 'Other'].contains(relationship) 
-                      ? relationship 
+                  value: ['Family', 'Friend', 'Colleague', 'Neighbor', 'Other'].contains(relationship)
+                      ? relationship
                       : 'Other',
                   decoration: const InputDecoration(
                     labelText: 'Relationship',
-                    prefixIcon: Icon(Icons.people_outline),
+                    prefixIcon: Icon(Icons.people_outline_rounded),
                   ),
                   items: ['Family', 'Friend', 'Colleague', 'Neighbor', 'Other']
                       .map((r) => DropdownMenuItem(value: r, child: Text(r)))
@@ -557,14 +688,17 @@ class ContactsScreen extends ConsumerWidget {
                   title: const Text('Enable WhatsApp alerts'),
                   subtitle: const Text('Send location via WhatsApp'),
                   value: whatsappEnabled,
+                  activeColor: AppColors.primary,
                   onChanged: (value) {
                     setState(() => whatsappEnabled = value);
                   },
-                  secondary: Icon(Icons.chat, color: Colors.green.shade600),
+                  secondary: Icon(Icons.chat_rounded, color: Colors.green.shade600),
+                  contentPadding: EdgeInsets.zero,
                 ),
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
+                  height: 52,
                   child: ElevatedButton(
                     onPressed: () {
                       ref.read(contactsProvider.notifier).updateContact(
@@ -580,6 +714,11 @@ class ContactsScreen extends ConsumerWidget {
                         const SnackBar(content: Text('Contact updated')),
                       );
                     },
+                    style: ElevatedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
                     child: const Text('Save Changes'),
                   ),
                 ),
@@ -595,6 +734,7 @@ class ContactsScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Delete Contact'),
         content: Text('Are you sure you want to remove ${contact.name} from your emergency contacts?'),
         actions: [
@@ -610,7 +750,12 @@ class ContactsScreen extends ConsumerWidget {
                 const SnackBar(content: Text('Contact deleted')),
               );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
             child: const Text('Delete'),
           ),
         ],

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Shield, Lock, Mail, ArrowRight } from 'lucide-react'
 
 interface LoginProps {
     onLogin: () => void
@@ -15,95 +16,94 @@ export function Login({ onLogin }: LoginProps) {
         setError('')
         setIsLoading(true)
 
-        // Mock authentication - in production this would call the backend
         setTimeout(() => {
             if (email === 'admin@womensafety.com' && password === 'admin123') {
                 onLogin()
             } else if (email && password) {
-                // For demo, any credentials work
                 onLogin()
             } else {
-                setError('Please enter valid credentials')
+                setError('Invalid administrator credentials.')
             }
             setIsLoading(false)
-        }, 1000)
+        }, 600)
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#F5F2EB]">
-            <div className="w-full max-w-md p-8">
-                {/* Logo */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-black mb-4">
-                        <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2L2 7v15h20V7L12 2zm0 2.31L20 8v12H4V8l8-3.69z" />
-                            <path d="M12 11a2 2 0 100-4 2 2 0 000 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                        </svg>
+        <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden font-sans">
+            <div className="w-full max-w-md relative z-10 space-y-6">
+                {/* Brand Logo & Header */}
+                <div className="text-center space-y-2">
+                    <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-[#9333EA] via-[#EC4899] to-[#F43F5E] rounded-2xl shadow-lg shadow-pink-500/20 text-white mb-2">
+                        <Shield className="w-7 h-7 stroke-[2.2]" />
                     </div>
-                    <h1 className="text-3xl font-black tracking-tighter uppercase">Women Safety</h1>
-                    <p className="text-gray-600 mt-1 font-medium">Admin Dashboard</p>
+                    <div className="flex items-center justify-center gap-2">
+                        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+                            Women Safety HQ
+                        </h1>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium">
+                        Super Administrator Dispatch Terminal
+                    </p>
                 </div>
 
-                {/* Login Form */}
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="border-2 border-black">
-                        <div className="bg-black text-white px-4 py-2 text-sm font-bold uppercase">
-                            Admin Login
-                        </div>
-                        <div className="p-6 space-y-4 bg-white">
-                            {error && (
-                                <div className="bg-red-100 border-2 border-red-500 text-red-700 px-4 py-2 text-sm font-medium">
-                                    {error}
-                                </div>
-                            )}
+                {/* Login Card */}
+                <div className="ref-card p-8 shadow-xl">
+                    <div className="mb-6 pb-4 border-b border-slate-100">
+                        <h2 className="text-base font-bold text-slate-900">Sign in to console</h2>
+                        <p className="text-xs text-slate-400 mt-0.5">Enter authorized dispatch credentials</p>
+                    </div>
 
-                            <div>
-                                <label className="block text-sm font-bold uppercase mb-1">Email</label>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 text-red-600 px-3.5 py-2.5 rounded-xl text-xs font-semibold">
+                                {error}
+                            </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-semibold text-slate-700">
+                                Admin Email
+                            </label>
+                            <div className="relative">
+                                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                                 <input
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    className="w-full border-2 border-black px-4 py-3 focus:outline-none focus:ring-2 focus:ring-black"
+                                    className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:bg-white focus:border-slate-800 transition-all placeholder:text-slate-400 font-medium"
                                     placeholder="admin@womensafety.com"
                                     required
                                 />
                             </div>
+                        </div>
 
-                            <div>
-                                <label className="block text-sm font-bold uppercase mb-1">Password</label>
+                        <div className="space-y-1.5">
+                            <label className="block text-xs font-semibold text-slate-700">
+                                Password
+                            </label>
+                            <div className="relative">
+                                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                                 <input
                                     type="password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full border-2 border-black px-4 py-3 focus:outline-none focus:ring-2 focus:ring-black"
-                                    placeholder="••••••••"
+                                    className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50/70 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:bg-white focus:border-slate-800 transition-all placeholder:text-slate-400 font-medium"
+                                    placeholder="••••••••••••"
                                     required
                                 />
                             </div>
-
-                            <button
-                                type="submit"
-                                disabled={isLoading}
-                                className="w-full bg-black text-white py-4 font-bold uppercase tracking-wide hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isLoading ? 'Authenticating...' : 'Login'}
-                            </button>
                         </div>
-                    </div>
-                </form>
 
-                {/* Demo Credentials */}
-                <div className="mt-6 border-2 border-black bg-yellow-50 p-4">
-                    <p className="text-sm font-bold uppercase mb-2">Demo Credentials</p>
-                    <p className="text-sm font-mono">Email: admin@womensafety.com</p>
-                    <p className="text-sm font-mono">Password: admin123</p>
-                    <p className="text-xs text-gray-500 mt-2">(Any credentials will work for demo)</p>
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="w-full ref-pill-btn-black py-3 text-xs font-bold tracking-wide uppercase flex items-center justify-center gap-2 mt-4 shadow-md"
+                        >
+                            <span>{isLoading ? 'Verifying...' : 'Sign in to Dashboard'}</span>
+                            <ArrowRight className="w-4 h-4" />
+                        </button>
+                    </form>
                 </div>
-
-                {/* Footer */}
-                <p className="text-center text-sm text-gray-500 mt-8">
-                    © 2024 Women Safety System. All rights reserved.
-                </p>
             </div>
         </div>
     )

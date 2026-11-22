@@ -4,7 +4,9 @@ import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Sos, SosDocument, SosStatus } from './schemas/sos.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
+import { Volunteer, VolunteerDocument } from '../volunteers/schemas/volunteer.schema';
 import { EventsGateway } from '../../gateway/events.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class SosService {
@@ -13,8 +15,10 @@ export class SosService {
     constructor(
         @InjectModel(Sos.name) private sosModel: Model<SosDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
+        @InjectModel(Volunteer.name) private volunteerModel: Model<VolunteerDocument>,
         private eventsGateway: EventsGateway,
         private configService: ConfigService,
+        private notificationsService: NotificationsService,
     ) { }
 
     async create(createSosDto: any): Promise<SosDocument> {
@@ -79,7 +83,42 @@ export class SosService {
             timestamp: sos.createdAt,
         });
 
-        // Notify nearby volunteers
+        // Notify nearby volunteers with proximity filtering
+        const coords = sos.initialLocation?.coordinates;
+        if (coords && coords.length === 2 && coords[0] !== 0 && coords[1] !== 0) {
+            try {
+                const nearbyVolunteers = await this.volunteerModel.find({
+                    'currentLocation.coordinates': {
+                        $nearSphere: {
+                            $geometry: {
+                                type: 'Point',
+                                coordinates: coords,
+                            },
+                            $maxDistance: 5000, // 5km radius
+                        },
+                    },
+                    status: { $in: ['available', 'busy'] },
+                    isActive: { $ne: false },
+                }).limit(20);
+
+                if (nearbyVolunteers.length > 0) {
+                    this.logger.log(`Found ${nearbyVolunteers.length} nearby volunteers within 5km for SOS ${sos._id}`);
+                    for (const v of nearbyVolunteers) {
+                        this.eventsGateway.server.to(`volunteer:${v._id}`).emit('volunteer:sos:nearby', {
+                            sosId: sos._id,
+                            userId: sos.userId,
+                            location: sos.initialLocation,
+                            severity: sos.severity,
+                            timestamp: sos.createdAt,
+                        });
+                    }
+                }
+            } catch (err: any) {
+                this.logger.error(`Error querying nearby volunteers: ${err?.message}`);
+            }
+        }
+
+        // Emit broadcast as well so all active listeners receive it
         this.eventsGateway.server.emit('volunteer:sos:nearby', {
             sosId: sos._id,
             userId: sos.userId,
@@ -136,38 +175,21 @@ export class SosService {
      * Send SMS notification
      */
     private async sendSMS(phone: string, message: string): Promise<void> {
-        // In production, integrate with Twilio or similar
-        // For now, log the message
-        this.logger.log(`[SMS] To: ${phone}`);
-        this.logger.log(`[SMS] Message: ${message}`);
-
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await this.notificationsService.sendSMS(phone, message);
     }
 
     /**
      * Send WhatsApp notification
      */
     private async sendWhatsApp(phone: string, message: string): Promise<void> {
-        // In production, integrate with WhatsApp Business API or Twilio
-        // For now, log the message
-        this.logger.log(`[WhatsApp] To: ${phone}`);
-        this.logger.log(`[WhatsApp] Message: ${message}`);
-
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await this.notificationsService.sendWhatsApp(phone, message);
     }
 
     /**
      * Send Email notification
      */
     private async sendEmail(to: string, subject: string, body: string): Promise<void> {
-        // In production, integrate with SendGrid, SES, etc.
-        this.logger.log(`[Email] To: ${to}`);
-        this.logger.log(`[Email] Subject: ${subject}`);
-        this.logger.log(`[Email] Body: ${body}`);
-
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await this.notificationsService.sendEmail(to, subject, body);
     }
 
     async findAll(filters: any = {}): Promise<SosDocument[]> {

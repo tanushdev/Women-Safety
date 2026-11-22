@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import * as maptilersdk from '@maptiler/sdk'
 import '@maptiler/sdk/dist/maptiler-sdk.css'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'
+import { Plus, MapPin, RefreshCw, Trash2, Edit2, X } from 'lucide-react'
+import { API_URL } from '@/config/api'
 
 interface Zone {
     _id: string
@@ -44,7 +44,7 @@ const emptyForm: ZoneForm = {
 export function Zones() {
     const [zones, setZones] = useState<Zone[]>([])
     const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
+    const [, setError] = useState<string | null>(null)
     const [showAddModal, setShowAddModal] = useState(false)
     const [editingZone, setEditingZone] = useState<Zone | null>(null)
     const [selectedType, setSelectedType] = useState<string | null>(null)
@@ -68,7 +68,7 @@ export function Zones() {
             setError(null)
         } catch (err) {
             console.error('Error fetching zones:', err)
-            setError('Failed to load zones')
+            setError('Failed to load geofenced zones')
             setZones([])
         } finally {
             setLoading(false)
@@ -79,71 +79,79 @@ export function Zones() {
         fetchZones()
     }, [])
 
-    // Helper function to get severity color
     const getSeverityColor = (severity: string) => {
         switch (severity) {
-            case 'low': return '#22c55e'      // Green
-            case 'medium': return '#f97316'   // Orange
-            case 'high': return '#ef4444'     // Red
-            case 'critical': return '#dc2626' // Dark Red
-            default: return '#f97316'         // Default to Orange
+            case 'critical': return '#EF4444'
+            case 'high': return '#F97316'
+            case 'medium': return '#EAB308'
+            case 'low': return '#10B981'
+            default: return '#EAB308'
         }
     }
 
-    // Helper function to create circle polygon
-    const createCirclePolygon = (centerLng: number, centerLat: number, radiusMeters: number, points: number = 64): number[][] => {
-        const coords: number[][] = []
-        const earthRadius = 6371000 // meters
+    const createCirclePolygon = (lng: number, lat: number, radiusMeters: number, points: number = 64) => {
+        const coords: [number, number][] = []
+        const earthRadius = 6371000
+        const d = radiusMeters / earthRadius
 
         for (let i = 0; i <= points; i++) {
-            const angle = (i / points) * 2 * Math.PI
-            const latOffset = (radiusMeters / earthRadius) * Math.cos(angle) * (180 / Math.PI)
-            const lngOffset = (radiusMeters / earthRadius) * Math.sin(angle) * (180 / Math.PI) / Math.cos(centerLat * Math.PI / 180)
-            coords.push([centerLng + lngOffset, centerLat + latOffset])
+            const bearing = (i * 360 / points) * Math.PI / 180
+            const latRad = lat * Math.PI / 180
+            const lngRad = lng * Math.PI / 180
+
+            const pLat = Math.asin(
+                Math.sin(latRad) * Math.cos(d) +
+                Math.cos(latRad) * Math.sin(d) * Math.cos(bearing)
+            )
+            const pLng = lngRad + Math.atan2(
+                Math.sin(bearing) * Math.sin(d) * Math.cos(latRad),
+                Math.cos(d) - Math.sin(latRad) * Math.sin(pLat)
+            )
+
+            coords.push([pLng * 180 / Math.PI, pLat * 180 / Math.PI])
         }
         return coords
     }
 
-    // Initialize map when modal opens
+    // Initialize Map when modal opens
     useEffect(() => {
         if (!showAddModal || !mapContainer.current || map.current) return
 
         const apiKey = import.meta.env.VITE_MAPTILER_API_KEY
-        if (!apiKey) {
-            console.error('MapTiler API key missing')
-            return
-        }
+        if (!apiKey) return
 
         maptilersdk.config.apiKey = apiKey
+
+        const defaultCenter: [number, number] = [77.5946, 12.9716]
+        const initialCenter = form.longitude && form.latitude
+            ? [form.longitude, form.latitude] as [number, number]
+            : defaultCenter
 
         map.current = new maptilersdk.Map({
             container: mapContainer.current,
             style: maptilersdk.MapStyle.STREETS,
-            center: [73.1596, 18.9999], // Default center
-            zoom: 12,
+            center: initialCenter,
+            zoom: 13,
         })
 
         map.current.on('load', () => {
             setMapReady(true)
 
-            // Add zone preview circle source
             map.current?.addSource('zone-preview', {
                 type: 'geojson',
                 data: { type: 'FeatureCollection', features: [] }
             })
 
-            // Add fill layer for zone preview
             map.current?.addLayer({
                 id: 'zone-preview-fill',
                 type: 'fill',
                 source: 'zone-preview',
                 paint: {
                     'fill-color': ['get', 'color'],
-                    'fill-opacity': 0.3
+                    'fill-opacity': 0.25,
                 }
             })
 
-            // Add outline layer for zone preview
             map.current?.addLayer({
                 id: 'zone-preview-outline',
                 type: 'line',
@@ -151,49 +159,40 @@ export function Zones() {
                 paint: {
                     'line-color': ['get', 'color'],
                     'line-width': 2,
-                    'line-opacity': 0.8
                 }
             })
+        })
 
-            // Add click handler
-            map.current?.on('click', (e) => {
-                const { lng, lat } = e.lngLat
-                setForm(prev => ({
-                    ...prev,
-                    latitude: lat,
-                    longitude: lng,
-                }))
+        map.current.on('click', (e) => {
+            const { lng, lat } = e.lngLat
+            setForm(prev => ({ ...prev, latitude: lat, longitude: lng }))
 
-                // Update or create marker
-                if (markerRef.current) {
-                    markerRef.current.setLngLat([lng, lat])
-                } else {
-                    const el = document.createElement('div')
-                    el.className = 'zone-marker'
-                    el.style.width = '24px'
-                    el.style.height = '24px'
-                    el.style.borderRadius = '50%'
-                    el.style.backgroundColor = getSeverityColor(form.severity)
-                    el.style.border = '3px solid white'
-                    el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)'
-                    el.style.cursor = 'move'
+            if (markerRef.current) {
+                markerRef.current.setLngLat([lng, lat])
+            } else {
+                const el = document.createElement('div')
+                el.style.width = '20px'
+                el.style.height = '20px'
+                el.style.borderRadius = '50%'
+                el.style.backgroundColor = getSeverityColor(form.severity)
+                el.style.border = '2px solid white'
+                el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)'
 
-                    markerRef.current = new maptilersdk.Marker({ element: el, draggable: true })
-                        .setLngLat([lng, lat])
-                        .addTo(map.current!)
+                markerRef.current = new maptilersdk.Marker({ element: el, draggable: true })
+                    .setLngLat([lng, lat])
+                    .addTo(map.current!)
 
-                    markerRef.current.on('dragend', () => {
-                        const lngLat = markerRef.current?.getLngLat()
-                        if (lngLat) {
-                            setForm(prev => ({
-                                ...prev,
-                                latitude: lngLat.lat,
-                                longitude: lngLat.lng,
-                            }))
-                        }
-                    })
-                }
-            })
+                markerRef.current.on('dragend', () => {
+                    const lngLat = markerRef.current?.getLngLat()
+                    if (lngLat) {
+                        setForm(prev => ({
+                            ...prev,
+                            latitude: lngLat.lat,
+                            longitude: lngLat.lng,
+                        }))
+                    }
+                })
+            }
         })
 
         return () => {
@@ -211,41 +210,16 @@ export function Zones() {
             const lat = editingZone.centerPoint?.coordinates[1]
             if (lng && lat) {
                 map.current.flyTo({ center: [lng, lat], zoom: 15 })
-
                 if (markerRef.current) {
                     markerRef.current.setLngLat([lng, lat])
-                } else {
-                    const el = document.createElement('div')
-                    el.style.width = '24px'
-                    el.style.height = '24px'
-                    el.style.borderRadius = '50%'
-                    el.style.backgroundColor = getSeverityColor(form.severity)
-                    el.style.border = '3px solid white'
-                    el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)'
-
-                    markerRef.current = new maptilersdk.Marker({ element: el, draggable: true })
-                        .setLngLat([lng, lat])
-                        .addTo(map.current!)
-
-                    markerRef.current.on('dragend', () => {
-                        const lngLat = markerRef.current?.getLngLat()
-                        if (lngLat) {
-                            setForm(prev => ({
-                                ...prev,
-                                latitude: lngLat.lat,
-                                longitude: lngLat.lng,
-                            }))
-                        }
-                    })
                 }
             }
         }
     }, [editingZone, mapReady])
 
-    // Update zone preview circle when form changes
+    // Update zone preview circle
     useEffect(() => {
         if (!map.current || !mapReady) return
-
         const source = map.current.getSource('zone-preview') as maptilersdk.GeoJSONSource
         if (!source) return
 
@@ -264,60 +238,60 @@ export function Zones() {
                     }
                 }]
             })
-
-            // Update marker color if exists
-            if (markerRef.current) {
-                const el = markerRef.current.getElement()
-                if (el) {
-                    el.style.backgroundColor = color
-                }
-            }
-        } else {
-            source.setData({ type: 'FeatureCollection', features: [] })
         }
     }, [form.latitude, form.longitude, form.radius, form.severity, mapReady])
 
     const handleSubmit = async () => {
-        if (!form.name) {
-            alert('Please enter a zone name')
-            return
-        }
-        if (!form.latitude || !form.longitude) {
-            alert('Please click on the map to set the zone location')
+        if (!form.name || !form.latitude || !form.longitude) {
+            alert('Please provide zone name and set location on map')
             return
         }
 
-        setSaving(true)
         try {
-            const data = {
+            setSaving(true)
+            const payload = {
                 name: form.name,
                 type: form.type,
                 severity: form.severity,
-                description: form.description || '',
-                latitude: Number(form.latitude),
-                longitude: Number(form.longitude),
-                radius: Number(form.radius),
-                isActive: true,
+                description: form.description,
+                radius: form.radius,
+                centerPoint: {
+                    type: 'Point',
+                    coordinates: [form.longitude, form.latitude]
+                },
+                isActive: true
             }
-
-            console.log('Sending zone data:', data)
 
             if (editingZone) {
-                await axios.put(`${API_URL}/zones/${editingZone._id}`, data)
+                await axios.patch(`${API_URL}/zones/${editingZone._id}`, payload, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                })
             } else {
-                await axios.post(`${API_URL}/zones`, data)
+                await axios.post(`${API_URL}/zones`, payload, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                })
             }
 
-            setShowAddModal(false)
-            setEditingZone(null)
-            setForm(emptyForm)
             fetchZones()
+            closeModal()
         } catch (err: any) {
             console.error('Error saving zone:', err)
-            console.error('Error response:', err.response?.data)
             alert(`Failed to save zone: ${err.response?.data?.message || err.message}`)
         } finally {
             setSaving(false)
+        }
+    }
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Are you sure you want to remove this monitored perimeter?')) return
+        try {
+            await axios.delete(`${API_URL}/zones/${id}`, {
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            })
+            fetchZones()
+        } catch (err) {
+            console.error('Error deleting zone:', err)
+            alert('Failed to delete zone')
         }
     }
 
@@ -335,18 +309,6 @@ export function Zones() {
         setShowAddModal(true)
     }
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this zone?')) return
-
-        try {
-            await axios.delete(`${API_URL}/zones/${id}`)
-            fetchZones()
-        } catch (err) {
-            console.error('Error deleting zone:', err)
-            alert('Failed to delete zone')
-        }
-    }
-
     const closeModal = () => {
         setShowAddModal(false)
         setEditingZone(null)
@@ -357,34 +319,11 @@ export function Zones() {
         ? zones.filter(z => z.type === selectedType)
         : zones
 
-    const getTypeColor = (type: string) => {
-        switch (type) {
-            case 'safe': return 'bg-green-500'
-            case 'danger': return 'bg-red-500'
-            case 'crowded': return 'bg-orange-500'
-            case 'police_station': return 'bg-blue-500'
-            case 'hospital': return 'bg-purple-500'
-            case 'shelter': return 'bg-teal-500'
-            default: return 'bg-gray-500'
-        }
-    }
-
-    const getTypeBg = (type: string) => {
-        switch (type) {
-            case 'safe': return 'bg-green-50'
-            case 'danger': return 'bg-red-50'
-            case 'crowded': return 'bg-orange-50'
-            case 'police_station': return 'bg-blue-50'
-            case 'hospital': return 'bg-purple-50'
-            case 'shelter': return 'bg-teal-50'
-            default: return 'bg-gray-50'
-        }
-    }
-
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-black"></div>
+            <div className="flex items-center justify-center h-64 text-slate-500 font-mono text-xs">
+                <RefreshCw className="w-5 h-5 animate-spin mr-2 text-slate-700" />
+                <span>QUERYING GEOFENCED RADAR...</span>
             </div>
         )
     }
@@ -392,230 +331,204 @@ export function Zones() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="command-panel p-6 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-200 shadow-sm">
                 <div>
-                    <h1 className="text-3xl font-bold uppercase tracking-tight">Zones</h1>
-                    <p className="text-muted-foreground">Click on map to tag safe and danger zones</p>
+                    <div className="flex items-center gap-2 mb-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                        <span className="text-[10px] font-mono font-semibold tracking-wider text-emerald-700 uppercase">
+                            Perimeter Geofencing
+                        </span>
+                    </div>
+                    <h1 className="text-xl font-bold tracking-tight text-slate-900 uppercase font-mono">
+                        Safe & Danger Havens
+                    </h1>
+                    <p className="text-xs text-slate-500 font-mono">Configure verified security boundaries, emergency shelters, and high-risk hotspots</p>
                 </div>
-                <button
-                    onClick={() => {
-                        setEditingZone(null)
-                        setForm(emptyForm)
-                        setShowAddModal(true)
-                    }}
-                    className="bg-black text-white border-2 border-black px-6 py-3 font-bold uppercase hover:bg-gray-800 transition-colors"
-                >
-                    + Add Zone on Map
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => {
+                            setEditingZone(null)
+                            setForm(emptyForm)
+                            setShowAddModal(true)
+                        }}
+                        className="command-button-primary px-4 py-2 rounded-lg text-xs font-mono font-bold uppercase flex items-center gap-2"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Tag New Zone</span>
+                    </button>
+                </div>
             </div>
 
-            {error && (
-                <div className="bg-red-50 border-2 border-red-500 text-red-700 p-4 font-bold">
-                    {error}
-                </div>
-            )}
-
-            {/* Stats */}
-            <div className="grid grid-cols-4 gap-4">
-                <div
-                    onClick={() => setSelectedType(null)}
-                    className={`border-2 border-black p-6 cursor-pointer transition-colors ${!selectedType ? 'bg-secondary' : 'hover:bg-secondary'}`}
-                >
-                    <div className="text-4xl font-black">{zones.length}</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Total Zones</div>
-                </div>
-                <div
-                    onClick={() => setSelectedType('safe')}
-                    className={`border-2 border-black p-6 cursor-pointer transition-colors ${selectedType === 'safe' ? 'bg-green-100' : 'bg-green-50 hover:bg-green-100'}`}
-                >
-                    <div className="text-4xl font-black text-green-600">
-                        {zones.filter(z => z.type === 'safe').length}
-                    </div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Safe Zones</div>
-                </div>
-                <div
-                    onClick={() => setSelectedType('danger')}
-                    className={`border-2 border-black p-6 cursor-pointer transition-colors ${selectedType === 'danger' ? 'bg-red-100' : 'bg-red-50 hover:bg-red-100'}`}
-                >
-                    <div className="text-4xl font-black text-red-600">
-                        {zones.filter(z => z.type === 'danger').length}
-                    </div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Danger Zones</div>
-                </div>
-                <div
-                    onClick={() => setSelectedType('police_station')}
-                    className={`border-2 border-black p-6 cursor-pointer transition-colors ${selectedType === 'police_station' ? 'bg-blue-100' : 'bg-blue-50 hover:bg-blue-100'}`}
-                >
-                    <div className="text-4xl font-black text-blue-600">
-                        {zones.filter(z => z.type === 'police_station').length}
-                    </div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Police Stations</div>
-                </div>
+            {/* Filter Stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono">
+                {[
+                    { label: 'ALL ZONES', count: zones.length, filter: null, color: 'text-slate-900' },
+                    { label: 'SAFE HAVENS', count: zones.filter(z => z.type === 'safe').length, filter: 'safe', color: 'text-emerald-600' },
+                    { label: 'DANGER HOTSPOTS', count: zones.filter(z => z.type === 'danger').length, filter: 'danger', color: 'text-red-600' },
+                    { label: 'POLICE POSTS', count: zones.filter(z => z.type === 'police_station').length, filter: 'police_station', color: 'text-blue-600' },
+                ].map(item => {
+                    const isSelected = selectedType === item.filter
+                    return (
+                        <div
+                            key={item.label}
+                            onClick={() => setSelectedType(item.filter)}
+                            className={`p-4 rounded-xl cursor-pointer transition-all border ${
+                                isSelected
+                                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                                    : 'bg-white border-slate-200 hover:bg-slate-50 shadow-sm'
+                            }`}
+                        >
+                            <div className={`text-2xl font-bold tabular-nums ${isSelected ? 'text-white' : item.color}`}>
+                                {item.count}
+                            </div>
+                            <div className={`text-[10px] font-semibold tracking-wider uppercase mt-1 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                                {item.label}
+                            </div>
+                        </div>
+                    )
+                })}
             </div>
 
             {/* Zones Grid */}
-            {filteredZones.length === 0 ? (
-                <div className="border-2 border-black p-12 text-center">
-                    <p className="text-xl font-bold uppercase">No Zones Found</p>
-                    <p className="text-muted-foreground mt-2">Click "Add Zone on Map" to create one</p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-3 gap-4">
-                    {filteredZones.map(zone => (
-                        <div key={zone._id} className={`border-2 border-black ${getTypeBg(zone.type)}`}>
-                            <div className={`${getTypeColor(zone.type)} text-white px-4 py-2 border-b-2 border-black flex items-center justify-between`}>
-                                <span className="font-bold uppercase">{zone.type.replace('_', ' ')}</span>
-                                <span className={`px-2 py-0.5 text-xs font-bold rounded ${zone.isActive ? 'bg-white text-green-600' : 'bg-gray-200 text-gray-600'}`}>
-                                    {zone.severity?.toUpperCase() || 'MEDIUM'}
-                                </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 font-mono">
+                {filteredZones.map(zone => (
+                    <div key={zone._id} className="command-card p-5 rounded-xl border border-slate-200 space-y-3">
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <h3 className="font-bold text-sm text-slate-900">{zone.name}</h3>
+                                <p className="text-[11px] text-slate-500 mt-0.5">{zone.description || 'Monitored area'}</p>
                             </div>
-                            <div className="p-4 space-y-3">
-                                <h3 className="font-bold text-lg">{zone.name}</h3>
-                                <p className="text-sm text-muted-foreground">{zone.description || 'No description'}</p>
-
-                                <div className="text-sm text-muted-foreground">
-                                    📍 Radius: {zone.radius || 500}m
-                                </div>
-
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => handleEdit(zone)}
-                                        className="flex-1 border-2 border-black px-3 py-2 font-medium hover:bg-secondary transition-colors"
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(zone._id)}
-                                        className="flex-1 border-2 border-black px-3 py-2 font-medium hover:bg-red-100 text-red-600 transition-colors"
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
-                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                zone.type === 'safe' ? 'tactical-badge-green' :
+                                zone.type === 'danger' ? 'tactical-badge-red' :
+                                'tactical-badge-blue'
+                            }`}>
+                                {zone.type.replace('_', ' ')}
+                            </span>
                         </div>
-                    ))}
-                </div>
-            )}
 
-            {/* Add/Edit Zone Modal with Map */}
+                        <div className="text-xs text-slate-600 flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                            <span className="flex items-center gap-1.5">
+                                <MapPin className="w-3.5 h-3.5 text-slate-500" />
+                                <span>Radius: {zone.radius || 500}m</span>
+                            </span>
+                            <span className="text-[10px] uppercase font-bold text-slate-600">
+                                {zone.severity || 'MEDIUM'}
+                            </span>
+                        </div>
+
+                        <div className="flex gap-2 pt-1 text-xs">
+                            <button
+                                onClick={() => handleEdit(zone)}
+                                className="flex-1 command-button-secondary py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1"
+                            >
+                                <Edit2 className="w-3 h-3" />
+                                <span>Edit</span>
+                            </button>
+                            <button
+                                onClick={() => handleDelete(zone._id)}
+                                className="px-3 py-1.5 rounded-lg bg-white text-slate-500 hover:text-red-600 hover:bg-red-50 border border-slate-200"
+                            >
+                                <Trash2 className="w-3 h-3" />
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Add / Edit Zone Modal */}
             {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-background border-2 border-black w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-                        <div className="p-4 border-b-2 border-black bg-gray-50">
-                            <h2 className="text-xl font-bold uppercase">
-                                {editingZone ? 'Edit Zone' : 'Add Zone - Click on Map'}
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-xl overflow-hidden flex flex-col border border-slate-200 shadow-2xl">
+                        <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between font-mono">
+                            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                                {editingZone ? 'Edit Monitored Perimeter' : 'Tag New Perimeter on Map'}
                             </h2>
+                            <button onClick={closeModal} className="text-slate-400 hover:text-slate-900">
+                                <X className="w-4 h-4" />
+                            </button>
                         </div>
 
-                        <div className="flex flex-1 overflow-hidden">
+                        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
                             {/* Map */}
-                            <div className="w-1/2 relative">
+                            <div className="w-full md:w-1/2 h-64 md:h-auto relative bg-slate-100">
                                 <div ref={mapContainer} className="absolute inset-0" />
-                                {!mapReady && (
-                                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
-                                    </div>
-                                )}
                                 {form.latitude && form.longitude && (
-                                    <div className="absolute bottom-4 left-4 bg-white border-2 border-black p-2 text-xs font-mono">
-                                        {form.latitude.toFixed(6)}, {form.longitude.toFixed(6)}
+                                    <div className="absolute bottom-3 left-3 bg-white/95 border border-slate-200 px-2.5 py-1 rounded text-[11px] font-mono text-emerald-700 shadow-sm">
+                                        {form.latitude.toFixed(5)}°, {form.longitude.toFixed(5)}°
                                     </div>
                                 )}
                             </div>
 
                             {/* Form */}
-                            <div className="w-1/2 p-4 overflow-y-auto border-l-2 border-black">
-                                <div className="space-y-4">
-                                    <div className="bg-yellow-50 border-2 border-yellow-500 p-3 text-sm">
-                                        👆 <strong>Click on the map</strong> to set zone location. Drag marker to adjust.
-                                    </div>
+                            <div className="w-full md:w-1/2 p-5 overflow-y-auto space-y-4 font-mono text-xs">
+                                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 text-[11px]">
+                                    Click anywhere on the map to position coordinates. Drag marker to adjust radius center.
+                                </div>
 
+                                <div>
+                                    <label className="block text-[10px] uppercase font-bold text-slate-700 mb-1">Perimeter Name</label>
+                                    <input
+                                        type="text"
+                                        value={form.name}
+                                        onChange={e => setForm({ ...form, name: e.target.value })}
+                                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-slate-800"
+                                        placeholder="e.g. Metro Junction, Safe Point"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-sm font-bold uppercase mb-1">Zone Name *</label>
+                                        <label className="block text-[10px] uppercase font-bold text-slate-700 mb-1">Type</label>
+                                        <select
+                                            value={form.type}
+                                            onChange={e => setForm({ ...form, type: e.target.value })}
+                                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none"
+                                        >
+                                            <option value="danger">Danger Hotspot</option>
+                                            <option value="safe">Safe Haven</option>
+                                            <option value="police_station">Police Station</option>
+                                            <option value="hospital">Hospital</option>
+                                            <option value="shelter">Shelter</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] uppercase font-bold text-slate-700 mb-1">Radius (Meters)</label>
                                         <input
-                                            type="text"
-                                            value={form.name}
-                                            onChange={e => setForm({ ...form, name: e.target.value })}
-                                            className="w-full border-2 border-black p-3 focus:outline-none"
-                                            placeholder="e.g., Market Area, Railway Station"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-bold uppercase mb-1">Zone Type</label>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {['safe', 'danger', 'crowded', 'police_station', 'hospital', 'shelter'].map(type => (
-                                                <button
-                                                    key={type}
-                                                    onClick={() => setForm({ ...form, type })}
-                                                    className={`p-2 border-2 border-black text-sm font-bold uppercase transition-colors ${form.type === type ? getTypeColor(type) + ' text-white' : 'hover:bg-gray-100'
-                                                        }`}
-                                                >
-                                                    {type.replace('_', ' ')}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-bold uppercase mb-1">Severity</label>
-                                        <div className="flex gap-2">
-                                            {['low', 'medium', 'high', 'critical'].map(sev => (
-                                                <button
-                                                    key={sev}
-                                                    onClick={() => setForm({ ...form, severity: sev })}
-                                                    className={`flex-1 p-2 border-2 border-black text-sm font-bold uppercase ${form.severity === sev ? 'bg-black text-white' : 'hover:bg-gray-100'
-                                                        }`}
-                                                >
-                                                    {sev}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-bold uppercase mb-1">Radius (meters)</label>
-                                        <input
-                                            type="range"
-                                            min="100"
-                                            max="2000"
-                                            step="100"
+                                            type="number"
                                             value={form.radius}
-                                            onChange={e => setForm({ ...form, radius: parseInt(e.target.value) })}
-                                            className="w-full"
-                                        />
-                                        <div className="text-center font-bold">{form.radius}m</div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-bold uppercase mb-1">Description</label>
-                                        <textarea
-                                            value={form.description}
-                                            onChange={e => setForm({ ...form, description: e.target.value })}
-                                            className="w-full border-2 border-black p-3 focus:outline-none resize-none"
-                                            rows={2}
-                                            placeholder="Describe why this zone is marked..."
+                                            onChange={e => setForm({ ...form, radius: Number(e.target.value) })}
+                                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none"
                                         />
                                     </div>
                                 </div>
-                            </div>
-                        </div>
 
-                        <div className="flex gap-2 p-4 border-t-2 border-black bg-gray-50">
-                            <button
-                                onClick={closeModal}
-                                className="flex-1 border-2 border-black px-4 py-3 font-bold uppercase hover:bg-secondary transition-colors"
-                                disabled={saving}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSubmit}
-                                disabled={saving || !form.latitude || !form.longitude}
-                                className="flex-1 bg-black text-white border-2 border-black px-4 py-3 font-bold uppercase hover:bg-gray-800 transition-colors disabled:opacity-50"
-                            >
-                                {saving ? 'Saving...' : (editingZone ? 'Update Zone' : 'Save Zone')}
-                            </button>
+                                <div>
+                                    <label className="block text-[10px] uppercase font-bold text-slate-700 mb-1">Description / Notes</label>
+                                    <textarea
+                                        value={form.description}
+                                        onChange={e => setForm({ ...form, description: e.target.value })}
+                                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none h-20 resize-none"
+                                        placeholder="Operational perimeter notes..."
+                                    />
+                                </div>
+
+                                <div className="flex gap-2 pt-2">
+                                    <button
+                                        onClick={handleSubmit}
+                                        disabled={saving}
+                                        className="flex-1 command-button-primary py-2.5 rounded-lg font-bold uppercase"
+                                    >
+                                        {saving ? 'Saving...' : 'Deploy Perimeter'}
+                                    </button>
+                                    <button
+                                        onClick={closeModal}
+                                        className="px-4 py-2.5 bg-white text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

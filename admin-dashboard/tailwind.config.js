@@ -17,85 +17,89 @@ module.exports = {
         },
         extend: {
             colors: {
-                border: "#000000", // Stark black borders
-                input: "#000000",
-                ring: "#000000",
-                background: "#F5F2EB", // Warm paper/cream background
-                foreground: "#000000", // Black text
+                border: "#E2E8F0",
+                input: "#F1F5F9",
+                ring: "#0F172A",
+                background: "#F8FAFC",
+                foreground: "#0F172A",
                 primary: {
-                    DEFAULT: "#000000",
-                    foreground: "#F5F2EB",
+                    DEFAULT: "#0F172A", // Sleek executive slate
+                    hover: "#1E293B",
+                    light: "#F1F5F9",
+                    foreground: "#FFFFFF",
                 },
                 secondary: {
-                    DEFAULT: "#E6E1D6", // Slightly darker cream for hover/active
-                    foreground: "#000000",
+                    DEFAULT: "#F1F5F9",
+                    foreground: "#0F172A",
                 },
                 destructive: {
-                    DEFAULT: "#FF3B30", // Sharp red for alerts
+                    DEFAULT: "#EF4444",
                     foreground: "#FFFFFF",
                 },
                 muted: {
-                    DEFAULT: "#E6E1D6",
-                    foreground: "#666666",
+                    DEFAULT: "#F8FAFC",
+                    foreground: "#64748B",
                 },
                 accent: {
-                    DEFAULT: "#000000",
-                    foreground: "#F5F2EB",
+                    DEFAULT: "#F1F5F9",
+                    foreground: "#0F172A",
                 },
                 popover: {
-                    DEFAULT: "#F5F2EB",
-                    foreground: "#000000",
+                    DEFAULT: "#FFFFFF",
+                    foreground: "#0F172A",
                 },
                 card: {
-                    DEFAULT: "#F5F2EB",
-                    foreground: "#000000",
+                    DEFAULT: "#FFFFFF",
+                    foreground: "#0F172A",
                 },
-                // Semantic colors
+                // Enterprise Light Command tokens
+                command: {
+                    bg: '#F8FAFC',
+                    surface: '#FFFFFF',
+                    elevated: '#F1F5F9',
+                    border: '#E2E8F0',
+                    highlight: '#F8FAFC',
+                },
                 danger: {
-                    DEFAULT: '#FF3B30',
-                    light: '#FFE5E5',
+                    DEFAULT: '#EF4444',
+                    light: '#FEF2F2',
+                    dark: '#991B1B',
                 },
                 safe: {
-                    DEFAULT: '#34C759',
-                    light: '#E0F8E5',
+                    DEFAULT: '#10B981',
+                    light: '#ECFDF5',
+                    dark: '#065F46',
                 },
                 warning: {
-                    DEFAULT: '#FF9500',
-                    light: '#FFF0D6',
+                    DEFAULT: '#F59E0B',
+                    light: '#FFFBEB',
+                    dark: '#92400E',
                 },
+                tactical: {
+                    DEFAULT: '#2563EB',
+                    light: '#EFF6FF',
+                    cyan: '#0284C7',
+                }
             },
             borderRadius: {
-                lg: "0px", // Sharp corners for brutalist look
-                md: "0px",
-                sm: "0px",
+                '3xl': '16px',
+                '2xl': '12px',
+                'xl': '10px',
+                'lg': '8px',
+                'md': '6px',
+                'sm': '4px',
+                'full': '9999px',
             },
             fontFamily: {
-                sans: ['Inter', 'sans-serif'],
-                display: ['Inter', 'sans-serif'], // Use for big headers
+                sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                mono: ['JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
             },
             boxShadow: {
-                'brutal': '4px 4px 0px 0px #000000', // Hard shadow
-                'brutal-sm': '2px 2px 0px 0px #000000',
-                'brutal-lg': '8px 8px 0px 0px #000000',
-            },
-            keyframes: {
-                "accordion-down": {
-                    from: { height: 0 },
-                    to: { height: "var(--radix-accordion-content-height)" },
-                },
-                "accordion-up": {
-                    from: { height: "var(--radix-accordion-content-height)" },
-                    to: { height: 0 },
-                },
-                pulse: {
-                    '0%, 100%': { opacity: 1 },
-                    '50%': { opacity: 0.5 },
-                },
-            },
-            animation: {
-                "accordion-down": "accordion-down 0.2s ease-out",
-                "accordion-up": "accordion-up 0.2s ease-out",
-                "pulse-slow": "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                'command-card': '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.03)',
+                'command-card-hover': '0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.04)',
+                'command-panel': '0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.02)',
+                'soft-sm': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                'soft': '0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04)',
             },
         },
     },

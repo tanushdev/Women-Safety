@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/layout/Layout'
 import { Dashboard } from './pages/Dashboard'
+import { FullViewMap } from './pages/FullViewMap'
 import { LiveSOS } from './pages/LiveSOS'
 import { Incidents } from './pages/Incidents'
 import { Zones } from './pages/Zones'
@@ -61,6 +62,7 @@ function App() {
             <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/live-map" element={<FullViewMap />} />
                 <Route path="/live-sos" element={<LiveSOS />} />
                 <Route path="/incidents" element={<Incidents />} />
                 <Route path="/zones" element={<Zones />} />

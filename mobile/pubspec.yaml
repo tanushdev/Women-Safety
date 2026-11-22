@@ -79,6 +79,8 @@ dependencies:
 
   # Haptic Feedback
   vibration: ^2.0.1
+  speech_to_text: ^7.5.0
+  crypto: ^3.0.8
 
 dev_dependencies:
   flutter_test:

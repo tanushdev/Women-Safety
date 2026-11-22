@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSocket } from '../hooks/useSocket'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'
+import { CheckCircle, Trash2, ExternalLink, RefreshCw, Radio, MapPin, User, Phone, Clock } from 'lucide-react'
+import { API_URL } from '@/config/api'
 
 interface SOSEvent {
     _id: string
@@ -30,7 +30,6 @@ export function LiveSOS() {
     const [selectedEvent, setSelectedEvent] = useState<SOSEvent | null>(null)
     const [isLoading, setIsLoading] = useState(true)
 
-    // Fetch SOS events from API
     const fetchSOSEvents = async () => {
         try {
             const response = await fetch(`${API_URL}/sos`, {
@@ -56,7 +55,6 @@ export function LiveSOS() {
 
         socket.on('sos:new', (event: SOSEvent) => {
             setSosEvents(prev => [event, ...prev])
-            // Play alert sound
             new Audio('/alert.mp3').play().catch(() => { })
         })
 
@@ -94,7 +92,7 @@ export function LiveSOS() {
     const getUserName = (event: SOSEvent) => {
         if (event.userName) return event.userName
         if (typeof event.userId === 'object' && event.userId !== null) return event.userId.name
-        return 'Unknown'
+        return 'Unknown User'
     }
 
     const getUserPhone = (event: SOSEvent) => {
@@ -157,8 +155,9 @@ export function LiveSOS() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black"></div>
+            <div className="flex items-center justify-center h-64 text-slate-500 font-mono text-xs">
+                <RefreshCw className="w-5 h-5 animate-spin mr-2 text-slate-700" />
+                <span>INITIALIZING DISPATCH TERMINAL...</span>
             </div>
         )
     }
@@ -166,75 +165,107 @@ export function LiveSOS() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="command-panel p-6 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-200 shadow-sm">
                 <div>
-                    <h1 className="text-3xl font-bold uppercase tracking-tight">Live SOS</h1>
-                    <p className="text-muted-foreground">Real-time emergency monitoring</p>
+                    <div className="flex items-center gap-2 mb-1.5">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-[10px] font-mono font-semibold tracking-wider text-red-600 uppercase">
+                            Emergency Response Unit
+                        </span>
+                    </div>
+                    <h1 className="text-xl font-bold tracking-tight text-slate-900 uppercase font-mono">
+                        Live SOS Dispatch Feed
+                    </h1>
+                    <p className="text-xs text-slate-500 font-mono">Real-time distress beacon intercept & responder coordination</p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                     <button
                         onClick={fetchSOSEvents}
-                        className="border-2 border-black px-4 py-2 font-medium hover:bg-secondary"
+                        className="command-button-secondary px-3.5 py-2 rounded-lg text-xs font-mono flex items-center gap-2"
                     >
-                        Refresh
+                        <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>SYNC</span>
                     </button>
-                    <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
-                        <span className="text-sm font-medium">{isConnected ? 'Live' : 'Offline'}</span>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-mono">
+                        <Radio className={`w-3.5 h-3.5 ${isConnected ? 'text-emerald-500 animate-pulse' : 'text-red-500'}`} />
+                        <span className={isConnected ? 'text-emerald-700 font-semibold' : 'text-red-600 font-semibold'}>
+                            {isConnected ? 'STREAM ONLINE' : 'DISCONNECTED'}
+                        </span>
                     </div>
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-4">
-                <div className="border-2 border-black p-6 bg-red-50">
-                    <div className="text-4xl font-black">{activeEvents.length}</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Active Emergencies</div>
+            {/* Metrics Ticker */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono">
+                <div className="command-card p-4 rounded-xl border border-red-200 bg-red-50/40">
+                    <div className="text-[10px] uppercase tracking-wider text-red-700 font-bold mb-1">
+                        Active Emergencies
+                    </div>
+                    <div className="text-3xl font-bold text-red-600 tabular-nums">{activeEvents.length}</div>
+                    <div className="text-[11px] text-slate-500 mt-1">Requiring immediate unit action</div>
                 </div>
-                <div className="border-2 border-black p-6 bg-green-50">
-                    <div className="text-4xl font-black">{resolvedEvents.length}</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Resolved</div>
+                <div className="command-card p-4 rounded-xl border border-emerald-200 bg-emerald-50/40">
+                    <div className="text-[10px] uppercase tracking-wider text-emerald-700 font-bold mb-1">
+                        Resolved Today
+                    </div>
+                    <div className="text-3xl font-bold text-emerald-600 tabular-nums">{resolvedEvents.length}</div>
+                    <div className="text-[11px] text-slate-500 mt-1">Successfully secured & closed</div>
                 </div>
-                <div className="border-2 border-black p-6">
-                    <div className="text-4xl font-black">{sosEvents.length}</div>
-                    <div className="text-sm font-medium uppercase tracking-wide">Total Today</div>
+                <div className="command-card p-4 rounded-xl border border-slate-200">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+                        Total Recorded Today
+                    </div>
+                    <div className="text-3xl font-bold text-slate-900 tabular-nums">{sosEvents.length}</div>
+                    <div className="text-[11px] text-slate-500 mt-1">Cumulative signals logged</div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Active SOS List */}
-                <div className="border-2 border-black">
-                    <div className="bg-red-600 text-white p-4 border-b-2 border-black">
-                        <h2 className="font-bold uppercase flex items-center gap-2">
-                            <span className="w-3 h-3 bg-white rounded-full animate-pulse"></span>
-                            Active Emergencies
+                <div className="command-panel rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between">
+                        <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                            <span>Active Incident Queue ({activeEvents.length})</span>
                         </h2>
                     </div>
-                    <div className="divide-y-2 divide-black max-h-[400px] overflow-y-auto">
+                    <div className="divide-y divide-slate-100 max-h-[460px] overflow-y-auto">
                         {activeEvents.length === 0 ? (
-                            <div className="p-8 text-center text-muted-foreground">
-                                No active emergencies
+                            <div className="p-12 text-center text-slate-400 font-mono text-xs">
+                                NO ACTIVE DISTRESS SIGNALS DETECTED
                             </div>
                         ) : (
                             activeEvents.map(event => {
                                 const eventId = event._id || event.id || ''
+                                const isSelected = selectedEvent && (selectedEvent._id || selectedEvent.id) === eventId
                                 return (
                                     <div
                                         key={eventId}
                                         onClick={() => setSelectedEvent(event)}
-                                        className={`p-4 cursor-pointer hover:bg-red-50 transition-colors ${selectedEvent && (selectedEvent._id || selectedEvent.id) === eventId ? 'bg-red-100' : ''}`}
+                                        className={`p-4 cursor-pointer transition-all ${
+                                            isSelected 
+                                                ? 'bg-red-50/80 border-l-4 border-red-500' 
+                                                : 'hover:bg-slate-50'
+                                        }`}
                                     >
                                         <div className="flex items-start justify-between">
                                             <div>
-                                                <div className="font-bold">{getUserName(event) || 'Unknown User'}</div>
-                                                <div className="text-sm text-muted-foreground">{getUserPhone(event)}</div>
+                                                <div className="font-semibold text-sm text-slate-900 flex items-center gap-2">
+                                                    <User className="w-3.5 h-3.5 text-slate-400" />
+                                                    <span>{getUserName(event) || 'Unknown User'}</span>
+                                                </div>
+                                                <div className="text-xs text-slate-500 font-mono mt-0.5 flex items-center gap-2">
+                                                    <Phone className="w-3 h-3 text-slate-400" />
+                                                    <span>{getUserPhone(event)}</span>
+                                                </div>
                                             </div>
                                             <div className="text-right">
-                                                <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold">
-                                                    {event.triggerType || 'MANUAL'}
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tactical-badge-red">
+                                                    {event.triggerType || 'PANIC_SOS'}
                                                 </span>
-                                                <div className="text-xs text-muted-foreground mt-1">
-                                                    {getTimeSince(event.createdAt)}
+                                                <div className="text-[10px] font-mono text-slate-400 mt-1.5 flex items-center justify-end gap-1">
+                                                    <Clock className="w-3 h-3" />
+                                                    <span>{getTimeSince(event.createdAt)}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -245,136 +276,133 @@ export function LiveSOS() {
                     </div>
                 </div>
 
-                {/* Selected Event Details */}
-                <div className="border-2 border-black">
-                    <div className="bg-secondary p-4 border-b-2 border-black">
-                        <h2 className="font-bold uppercase">Event Details</h2>
+                {/* Selected Event Tactical Details */}
+                <div className="command-panel rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                    <div className="p-4 border-b border-slate-100 bg-slate-50/80">
+                        <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900">
+                            Incident Telemetry Breakdown
+                        </h2>
                     </div>
                     {selectedEvent ? (
-                        <div className="p-4 space-y-4">
-                            <div className="text-center py-4 border-b-2 border-black">
-                                <div className="text-4xl mb-2">🚨</div>
-                                <div className="font-black text-xl">{getUserName(selectedEvent)}</div>
-                                <div className="text-muted-foreground">{getUserPhone(selectedEvent)}</div>
+                        <div className="p-5 space-y-4">
+                            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-center space-y-1">
+                                <span className="text-[10px] font-mono text-red-600 uppercase tracking-widest font-bold">
+                                    [ EMERGENCY TARGET ]
+                                </span>
+                                <div className="font-bold text-lg text-slate-900 font-mono">{getUserName(selectedEvent)}</div>
+                                <div className="text-xs text-slate-500 font-mono">{getUserPhone(selectedEvent)}</div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="border-2 border-black p-3">
-                                    <div className="text-xs text-muted-foreground uppercase">Status</div>
-                                    <div className={`font-bold ${selectedEvent.status === 'RESOLVED' ? 'text-green-600' : 'text-red-600'}`}>
+                            <div className="grid grid-cols-2 gap-3 font-mono text-xs">
+                                <div className="p-3 rounded-lg bg-white border border-slate-200 shadow-sm">
+                                    <div className="text-[10px] text-slate-400 uppercase">Operational Status</div>
+                                    <div className={`font-bold mt-1 ${selectedEvent.status === 'RESOLVED' ? 'text-emerald-600' : 'text-red-600'}`}>
                                         {selectedEvent.status}
                                     </div>
                                 </div>
-                                <div className="border-2 border-black p-3">
-                                    <div className="text-xs text-muted-foreground uppercase">Severity</div>
-                                    <div className="font-bold">{selectedEvent.severity || 'HIGH'}</div>
+                                <div className="p-3 rounded-lg bg-white border border-slate-200 shadow-sm">
+                                    <div className="text-[10px] text-slate-400 uppercase">Threat Priority</div>
+                                    <div className="font-bold text-amber-600 mt-1">{selectedEvent.severity || 'P1 HIGH'}</div>
                                 </div>
                             </div>
 
-                            <div className="border-2 border-black p-3">
-                                <div className="text-xs text-muted-foreground uppercase">Location</div>
-                                <div className="font-mono text-sm">
-                                    {getLocation(selectedEvent).latitude.toFixed(4)}, {getLocation(selectedEvent).longitude.toFixed(4)}
+                            <div className="p-3 rounded-lg bg-white border border-slate-200 shadow-sm font-mono text-xs">
+                                <div className="text-[10px] text-slate-400 uppercase flex items-center justify-between">
+                                    <span>GPS Coordinates</span>
+                                    <MapPin className="w-3.5 h-3.5 text-red-500" />
+                                </div>
+                                <div className="text-sm font-bold text-slate-800 mt-1">
+                                    {getLocation(selectedEvent).latitude.toFixed(5)}° N, {getLocation(selectedEvent).longitude.toFixed(5)}° E
                                 </div>
                                 <a
                                     href={`https://www.google.com/maps?q=${getLocation(selectedEvent).latitude},${getLocation(selectedEvent).longitude}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-blue-600 text-sm underline"
+                                    className="text-blue-600 text-[11px] inline-flex items-center gap-1 mt-2 hover:underline font-semibold"
                                 >
-                                    View on Map →
+                                    <span>Open Tactical Satellite Map</span>
+                                    <ExternalLink className="w-3 h-3" />
                                 </a>
                             </div>
 
-                            <div className="border-2 border-black p-3">
-                                <div className="text-xs text-muted-foreground uppercase">Triggered At</div>
-                                <div className="font-bold">
+                            <div className="p-3 rounded-lg bg-white border border-slate-200 shadow-sm font-mono text-xs">
+                                <div className="text-[10px] text-slate-400 uppercase">Distress Timestamp</div>
+                                <div className="font-bold text-slate-800 mt-1">
                                     {new Date(selectedEvent.createdAt).toLocaleString()}
                                 </div>
                             </div>
 
-                            {/* User Details if available */}
-                            {typeof selectedEvent.userId === 'object' && (
-                                <div className="border-2 border-black p-3">
-                                    <div className="text-xs text-muted-foreground uppercase mb-2">User Info</div>
-                                    {selectedEvent.userId.email && (
-                                        <div className="text-sm">Email: {selectedEvent.userId.email}</div>
-                                    )}
-                                    {selectedEvent.userId.age && (
-                                        <div className="text-sm">Age: {selectedEvent.userId.age}</div>
-                                    )}
-                                    {selectedEvent.userId.aadharNumber && (
-                                        <div className="text-sm">Aadhar: {selectedEvent.userId.aadharNumber}</div>
-                                    )}
-                                </div>
-                            )}
-
-                            <div className="flex gap-2">
+                            <div className="flex gap-2.5 pt-2">
                                 {selectedEvent.status !== 'RESOLVED' && (
                                     <button
                                         onClick={() => resolveEvent(selectedEvent._id || selectedEvent.id || '')}
-                                        className="flex-1 bg-green-600 text-white border-2 border-black px-4 py-3 font-bold uppercase hover:bg-green-700"
+                                        className="flex-1 command-button-primary py-2.5 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-1.5"
                                     >
-                                        ✓ Mark Resolved
+                                        <CheckCircle className="w-4 h-4" />
+                                        <span>RESOLVE INCIDENT</span>
                                     </button>
                                 )}
                                 <button
                                     onClick={() => deleteEvent(selectedEvent._id || selectedEvent.id || '')}
-                                    className="flex-1 bg-red-600 text-white border-2 border-black px-4 py-3 font-bold uppercase hover:bg-red-700"
+                                    className="px-4 py-2.5 rounded-lg bg-white text-slate-600 hover:text-red-600 hover:bg-red-50 border border-slate-200 text-xs font-mono font-semibold transition-colors flex items-center gap-1.5"
                                 >
-                                    Delete
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Purge</span>
                                 </button>
                             </div>
                         </div>
                     ) : (
-                        <div className="p-8 text-center text-muted-foreground">
-                            Select an event to view details
+                        <div className="p-12 text-center text-slate-400 font-mono text-xs">
+                            Select an emergency event from the queue to inspect live telemetry.
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* Recent History */}
-            <div className="border-2 border-black">
-                <div className="bg-secondary p-4 border-b-2 border-black">
-                    <h2 className="font-bold uppercase">Recent History</h2>
+            {/* Recent History Table */}
+            <div className="command-panel rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                <div className="p-4 border-b border-slate-100 bg-slate-50/80">
+                    <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900">
+                        Incident Audit Log
+                    </h2>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full text-xs font-mono">
                         <thead>
-                            <tr className="border-b-2 border-black bg-gray-100">
-                                <th className="text-left p-4 font-bold uppercase text-sm">User</th>
-                                <th className="text-left p-4 font-bold uppercase text-sm">Type</th>
-                                <th className="text-left p-4 font-bold uppercase text-sm">Status</th>
-                                <th className="text-left p-4 font-bold uppercase text-sm">Time</th>
-                                <th className="text-left p-4 font-bold uppercase text-sm">Actions</th>
+                            <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 text-left">
+                                <th className="p-3.5 uppercase font-semibold">User Identity</th>
+                                <th className="p-3.5 uppercase font-semibold">Trigger Mode</th>
+                                <th className="p-3.5 uppercase font-semibold">Status</th>
+                                <th className="p-3.5 uppercase font-semibold">Timestamp</th>
+                                <th className="p-3.5 uppercase font-semibold text-right">Action</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y-2 divide-black">
+                        <tbody className="divide-y divide-slate-100">
                             {sosEvents.slice(0, 10).map(event => {
                                 const eventId = event._id || event.id || ''
                                 return (
-                                    <tr key={eventId} className="hover:bg-secondary">
-                                        <td className="p-4">
-                                            <div className="font-medium">{getUserName(event) || 'Unknown User'}</div>
-                                            <div className="text-sm text-muted-foreground">{getUserPhone(event)}</div>
+                                    <tr key={eventId} className="hover:bg-slate-50 transition-colors">
+                                        <td className="p-3.5">
+                                            <div className="font-semibold text-slate-900">{getUserName(event)}</div>
+                                            <div className="text-[11px] text-slate-500">{getUserPhone(event)}</div>
                                         </td>
-                                        <td className="p-4">{event.triggerType || 'MANUAL'}</td>
-                                        <td className="p-4">
-                                            <span className={`px-2 py-1 text-xs font-bold ${event.status === 'RESOLVED' ? 'bg-green-500 text-white' :
-                                                event.status === 'CANCELLED' ? 'bg-gray-500 text-white' :
-                                                    'bg-red-500 text-white'
-                                                }`}>
+                                        <td className="p-3.5 text-slate-700">{event.triggerType || 'MANUAL_SOS'}</td>
+                                        <td className="p-3.5">
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                                event.status === 'RESOLVED' ? 'tactical-badge-green' :
+                                                event.status === 'CANCELLED' ? 'tactical-badge-amber' :
+                                                'tactical-badge-red'
+                                            }`}>
                                                 {event.status}
                                             </span>
                                         </td>
-                                        <td className="p-4 text-sm">{getTimeSince(event.createdAt)}</td>
-                                        <td className="p-4">
+                                        <td className="p-3.5 text-slate-500">{getTimeSince(event.createdAt)}</td>
+                                        <td className="p-3.5 text-right">
                                             <button
                                                 onClick={() => setSelectedEvent(event)}
-                                                className="border border-black px-2 py-1 text-sm hover:bg-gray-100"
+                                                className="command-button-secondary px-2.5 py-1 rounded text-[11px] font-semibold"
                                             >
-                                                View
+                                                Inspect
                                             </button>
                                         </td>
                                     </tr>
