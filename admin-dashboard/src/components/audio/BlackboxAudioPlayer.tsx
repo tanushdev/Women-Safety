@@ -40,6 +40,7 @@ export function BlackboxAudioPlayer({
     incidentId,
     citizenName,
     audioUrl: initialAudioUrl,
+    durationSeconds = 25,
     sha256Checksum: initialChecksum,
     digitalCertificate,
     timestamp,
@@ -51,7 +52,7 @@ export function BlackboxAudioPlayer({
     const [checksum, setChecksum] = useState<string | undefined>(initialChecksum)
     const [isPlaying, setIsPlaying] = useState(false)
     const [currentTime, setCurrentTime] = useState(0)
-    const [duration, setDuration] = useState(0)
+    const [duration, setDuration] = useState(durationSeconds)
     const [isMuted, setIsMuted] = useState(false)
     const [playbackRate, setPlaybackRate] = useState(1.0)
     const [copiedHash, setCopiedHash] = useState(false)
@@ -60,6 +61,8 @@ export function BlackboxAudioPlayer({
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
     const animationFrameRef = useRef<number | null>(null)
+
+    const effectiveDuration = (duration > 0 && isFinite(duration)) ? duration : durationSeconds
 
     // Update resolved URL if prop changes
     useEffect(() => {
@@ -212,7 +215,7 @@ export function BlackboxAudioPlayer({
     }
 
     const formatSeconds = (sec: number) => {
-        if (!sec || isNaN(sec)) return '00:00'
+        if (!sec || isNaN(sec) || !isFinite(sec)) return '00:00'
         const m = Math.floor(sec / 60).toString().padStart(2, '0')
         const s = (Math.floor(sec) % 60).toString().padStart(2, '0')
         return `${m}:${s}`
@@ -235,14 +238,19 @@ export function BlackboxAudioPlayer({
                 <audio
                     ref={audioRef}
                     src={currentAudioUrl}
-                    crossOrigin="anonymous"
+                    preload="auto"
                     onTimeUpdate={() => {
                         if (audioRef.current) {
                             setCurrentTime(audioRef.current.currentTime)
                         }
                     }}
                     onLoadedMetadata={() => {
-                        if (audioRef.current && audioRef.current.duration) {
+                        if (audioRef.current && audioRef.current.duration && isFinite(audioRef.current.duration)) {
+                            setDuration(Math.ceil(audioRef.current.duration))
+                        }
+                    }}
+                    onCanPlay={() => {
+                        if (audioRef.current && audioRef.current.duration && isFinite(audioRef.current.duration)) {
                             setDuration(Math.ceil(audioRef.current.duration))
                         }
                     }}
@@ -251,8 +259,7 @@ export function BlackboxAudioPlayer({
                         setCurrentTime(0)
                     }}
                     onError={(e) => {
-                        console.error('Audio load error:', e)
-                        setIsPlaying(false)
+                        console.warn('Audio element load notice:', e)
                     }}
                 />
             )}
@@ -316,7 +323,7 @@ export function BlackboxAudioPlayer({
                             <span className="text-[10px] font-semibold text-emerald-600">
                                 {isPlaying ? 'Playing Real Recording' : 'Recording Ready'}
                             </span>
-                            <span>{formatSeconds(duration)}</span>
+                            <span>{formatSeconds(effectiveDuration)}</span>
                         </div>
 
                         <div className="w-full flex justify-center py-1">
@@ -327,11 +334,21 @@ export function BlackboxAudioPlayer({
                         <input
                             type="range"
                             min={0}
-                            max={duration || 20}
+                            max={effectiveDuration}
                             value={currentTime}
                             onChange={(e) => handleSeek(Number(e.target.value))}
                             className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
                         />
+
+                        {/* Native Browser Audio Controls for 100% Reliable Direct Playback */}
+                        <div className="pt-1.5 border-t border-slate-200/60">
+                            <audio
+                                controls
+                                src={currentAudioUrl}
+                                className="w-full h-8 rounded-lg"
+                                preload="auto"
+                            />
+                        </div>
                     </div>
 
                     {/* Controls Bar */}

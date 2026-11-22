@@ -25,9 +25,20 @@ async function bootstrap() {
         fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    // Serve static audio and evidence uploads
-    app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-    app.use(`/${apiPrefix}/uploads`, express.static(path.join(process.cwd(), 'uploads')));
+    // Serve static audio and evidence uploads with open CORS for cross-origin audio playback
+    const staticCorsMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        if (req.method === 'OPTIONS') {
+            return res.sendStatus(200);
+        }
+        next();
+    };
+
+    app.use('/uploads', staticCorsMiddleware, express.static(path.join(process.cwd(), 'uploads')));
+    app.use(`/${apiPrefix}/uploads`, staticCorsMiddleware, express.static(path.join(process.cwd(), 'uploads')));
 
     // Security - disable strict CSP on docs so Swagger UI assets can render
     app.use(
