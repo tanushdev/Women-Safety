@@ -1,3 +1,11 @@
+import * as dns from 'dns';
+// Resolve MongoDB SRV records via Google & Cloudflare DNS to bypass ISP/router DNS ECONNREFUSED
+try {
+    dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+} catch (e) {
+    // Ignore if not supported in environment
+}
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
