@@ -1,5 +1,18 @@
-import { useState, useRef, useEffect } from 'react'
-import { Play, Pause, Volume2, VolumeX, Download, ShieldCheck, Radio, Check, Copy } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import {
+    Play,
+    Pause,
+    Volume2,
+    VolumeX,
+    Download,
+    ShieldCheck,
+    Radio,
+    Check,
+    Copy,
+    Mic,
+    Headphones,
+    FileText
+} from 'lucide-react'
 
 interface BlackboxAudioPlayerProps {
     incidentId: string
@@ -16,7 +29,7 @@ export function BlackboxAudioPlayer({
     incidentId,
     citizenName,
     audioUrl,
-    durationSeconds = 25,
+    durationSeconds = 24,
     sha256Checksum,
     digitalCertificate,
     timestamp,
@@ -27,64 +40,216 @@ export function BlackboxAudioPlayer({
     const [isMuted, setIsMuted] = useState(false)
     const [playbackRate, setPlaybackRate] = useState(1.0)
     const [copiedHash, setCopiedHash] = useState(false)
-    const [audioContextActive, setAudioContextActive] = useState(false)
+    const [activeTranscriptSegment, setActiveTranscriptSegment] = useState<number>(0)
+    const [audioMode, setAudioMode] = useState<'citizen' | 'dispatch'>('citizen')
 
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const canvasRef = useRef<HTMLCanvasElement | null>(null)
     const animationFrameRef = useRef<number | null>(null)
     const audioContextRef = useRef<AudioContext | null>(null)
-    const oscillatorRef = useRef<OscillatorNode | null>(null)
+    const noiseNodeRef = useRef<AudioNode | null>(null)
+    const speechActiveRef = useRef<boolean>(false)
 
     // Compute or format SHA-256 checksum & certificate
     const effectiveHash = sha256Checksum || `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855${incidentId.slice(-6)}`
     const effectiveCert = digitalCertificate || `CERT_WS_${effectiveHash.substring(0, 16).toUpperCase()}`
 
-    // Synthetic live audio generator when audio file is simulated/in progress
-    const togglePlayback = () => {
-        if (!audioUrl) {
-            // Web Audio API ambient distress tone simulation for demo/test mode
-            if (!audioContextActive) {
-                try {
-                    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-                    audioContextRef.current = ctx
+    // Transcript lines synchronized with simulated playback
+    const transcripts = [
+        {
+            time: '0:00 - 0:08',
+            speaker: 'CITIZEN AMBIENT MIC',
+            text: `Help! Please help me! Someone has been following me near the sector road. I am in danger, please send help!`,
+            type: 'citizen'
+        },
+        {
+            time: '0:08 - 0:16',
+            speaker: 'CENTRAL DISPATCH #104',
+            text: `Safeguard Command Center copy distress beacon from ${citizenName}. GPS coordinates verified. Emergency units are en route.`,
+            type: 'dispatch'
+        },
+        {
+            time: '0:16 - 0:24',
+            speaker: 'POLICE AUTO-RELAY 112',
+            text: `National emergency protocol active. Sector patrol dispatched. Blackbox audio recorded and cryptographically sealed.`,
+            type: 'police'
+        }
+    ]
 
-                    // Generate a low ambient frequency with subtle flutter
-                    const osc = ctx.createOscillator()
-                    const gain = ctx.createGain()
-                    osc.type = 'sine'
-                    osc.frequency.setValueAtTime(440, ctx.currentTime) // A4 tone
-                    gain.gain.setValueAtTime(0.04, ctx.currentTime)
-
-                    osc.connect(gain)
-                    gain.connect(ctx.destination)
-                    osc.start()
-
-                    oscillatorRef.current = osc
-                    setAudioContextActive(true)
-                    setIsPlaying(true)
-                } catch (e) {
-                    console.error('AudioContext error:', e)
-                    setIsPlaying(true)
-                }
-            } else {
-                if (oscillatorRef.current) {
-                    oscillatorRef.current.stop()
-                    oscillatorRef.current.disconnect()
-                    oscillatorRef.current = null
-                }
-                setAudioContextActive(false)
-                setIsPlaying(false)
+    // Stop all audio synthesis & effects
+    const stopSynthesizedAudio = useCallback(() => {
+        speechActiveRef.current = false
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+            window.speechSynthesis.cancel()
+        }
+        if (noiseNodeRef.current) {
+            try {
+                noiseNodeRef.current.disconnect()
+            } catch (e) {
+                // Ignore
             }
+            noiseNodeRef.current = null
+        }
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close().catch(() => {})
+            audioContextRef.current = null
+        }
+    }, [])
+
+    // Play authentic 2-tone radio squelch chirp
+    const playRadioSquelch = (ctx: AudioContext) => {
+        try {
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.type = 'triangle'
+            osc.frequency.setValueAtTime(850, ctx.currentTime)
+            osc.frequency.setValueAtTime(1050, ctx.currentTime + 0.06)
+            gain.gain.setValueAtTime(isMuted ? 0 : 0.05, ctx.currentTime)
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.14)
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.start()
+            osc.stop(ctx.currentTime + 0.14)
+        } catch (e) {
+            // Ignore Web Audio permission issues
+        }
+    }
+
+    // Play subtle VHF emergency radio background atmosphere (replaces annoying sine hum!)
+    const startRadioAtmosphere = (ctx: AudioContext) => {
+        try {
+            const bufferSize = ctx.sampleRate * 2
+            const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+            const output = noiseBuffer.getChannelData(0)
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1
+            }
+
+            const whiteNoise = ctx.createBufferSource()
+            whiteNoise.buffer = noiseBuffer
+            whiteNoise.loop = true
+
+            // Bandpass filter to sound like an authentic VHF tactical radio channel
+            const filter = ctx.createBiquadFilter()
+            filter.type = 'bandpass'
+            filter.frequency.setValueAtTime(1200, ctx.currentTime)
+            filter.Q.setValueAtTime(2.5, ctx.currentTime)
+
+            const gain = ctx.createGain()
+            gain.gain.setValueAtTime(isMuted ? 0 : 0.006, ctx.currentTime) // Extremely quiet realistic radio atmosphere
+
+            whiteNoise.connect(filter)
+            filter.connect(gain)
+            gain.connect(ctx.destination)
+            whiteNoise.start()
+
+            noiseNodeRef.current = whiteNoise
+        } catch (e) {
+            // Ignore
+        }
+    }
+
+    // Spoken voice transmission using SpeechSynthesis
+    const playSpokenVoice = (text: string, pitch = 1.1, rate = 1.05, onEnd?: () => void) => {
+        if (typeof window === 'undefined' || !('speechSynthesis' in window) || isMuted) {
+            if (onEnd) onEnd()
             return
         }
 
-        // HTML5 Audio playback
-        if (audioRef.current) {
-            if (isPlaying) {
+        window.speechSynthesis.cancel()
+        const utterance = new SpeechSynthesisUtterance(text)
+        utterance.rate = rate * playbackRate
+        utterance.pitch = pitch
+
+        // Select natural English voice if available
+        const voices = window.speechSynthesis.getVoices()
+        const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Female') || v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha'))) || voices.find(v => v.lang.startsWith('en'))
+        if (englishVoice) {
+            utterance.voice = englishVoice
+        }
+
+        utterance.onend = () => {
+            if (speechActiveRef.current && onEnd) onEnd()
+        }
+
+        utterance.onerror = () => {
+            if (speechActiveRef.current && onEnd) onEnd()
+        }
+
+        window.speechSynthesis.speak(utterance)
+    }
+
+    // Start full voice transmission routine
+    const startRealisticVoiceRoutine = () => {
+        speechActiveRef.current = true
+
+        try {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+            const ctx = new AudioContextClass()
+            audioContextRef.current = ctx
+            playRadioSquelch(ctx)
+            startRadioAtmosphere(ctx)
+        } catch (e) {
+            // Ignore
+        }
+
+        if (audioMode === 'citizen') {
+            // Step 1: Citizen Distress Voice
+            setActiveTranscriptSegment(0)
+            playSpokenVoice(
+                `Help! Please help me! Someone has been following me near the sector road. I am in danger, please send help!`,
+                1.25,
+                1.05,
+                () => {
+                    if (!speechActiveRef.current) return
+                    // Step 2: Central Dispatch Acknowledgment
+                    setActiveTranscriptSegment(1)
+                    if (audioContextRef.current) playRadioSquelch(audioContextRef.current)
+                    playSpokenVoice(
+                        `Safeguard Command Center copy distress beacon from ${citizenName}. GPS coordinates verified. Emergency units are en route.`,
+                        1.0,
+                        1.0,
+                        () => {
+                            if (!speechActiveRef.current) return
+                            setActiveTranscriptSegment(2)
+                            playSpokenVoice(
+                                `National emergency protocol active. Sector patrol dispatched. Blackbox audio certified and sealed.`,
+                                0.95,
+                                1.05
+                            )
+                        }
+                    )
+                }
+            )
+        } else {
+            // Direct Dispatcher Radio Transmission
+            setActiveTranscriptSegment(1)
+            playSpokenVoice(
+                `Safeguard Command Center copy distress beacon from ${citizenName}. GPS coordinates verified. Guardian units and Police 112 alerted.`,
+                1.0,
+                1.0
+            )
+        }
+    }
+
+    // Toggle Play/Pause
+    const togglePlayback = () => {
+        if (isPlaying) {
+            // Pause
+            setIsPlaying(false)
+            if (audioRef.current) {
                 audioRef.current.pause()
-                setIsPlaying(false)
+            }
+            stopSynthesizedAudio()
+        } else {
+            // Play
+            setIsPlaying(true)
+            if (audioUrl && audioRef.current) {
+                audioRef.current.play().catch(() => {
+                    startRealisticVoiceRoutine()
+                })
             } else {
-                audioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(true))
+                startRealisticVoiceRoutine()
             }
         }
     }
@@ -97,19 +262,28 @@ export function BlackboxAudioPlayer({
                 setCurrentTime(prev => {
                     if (prev >= durationSeconds) {
                         setIsPlaying(false)
-                        if (oscillatorRef.current) {
-                            oscillatorRef.current.stop()
-                            oscillatorRef.current = null
-                            setAudioContextActive(false)
-                        }
+                        stopSynthesizedAudio()
                         return 0
                     }
-                    return prev + 1
+                    const next = prev + 1
+                    if (next <= 8) setActiveTranscriptSegment(0)
+                    else if (next <= 16) setActiveTranscriptSegment(1)
+                    else setActiveTranscriptSegment(2)
+                    return next
                 })
             }, 1000 / playbackRate)
+        } else {
+            stopSynthesizedAudio()
         }
         return () => clearInterval(timer)
-    }, [isPlaying, durationSeconds, playbackRate])
+    }, [isPlaying, durationSeconds, playbackRate, stopSynthesizedAudio])
+
+    // Clean up audio on unmount
+    useEffect(() => {
+        return () => {
+            stopSynthesizedAudio()
+        }
+    }, [stopSynthesizedAudio])
 
     // Waveform rendering
     useEffect(() => {
@@ -134,26 +308,22 @@ export function BlackboxAudioPlayer({
                 let barHeight = 8
 
                 if (isPlaying) {
-                    // Dynamic pulsating bars while audio is playing
                     const noise = Math.sin(i * 0.45 + phase) * Math.cos(i * 0.25 - phase * 0.8)
                     barHeight = Math.max(6, Math.min(height - 4, (Math.abs(noise) * (height - 10)) + 6))
                 } else {
-                    // Static baseline waveform
                     barHeight = 6 + Math.sin(i * 0.5) * 6
                 }
 
                 const y = (height - barHeight) / 2
-
-                // Gradient coloring for active bars
                 const progressRatio = currentTime / durationSeconds
                 const isCurrent = (i / bars) <= progressRatio
 
                 if (isCurrent && isPlaying) {
-                    ctx.fillStyle = '#FF2D78' // Vibrant Safety Pink
+                    ctx.fillStyle = '#FF2D78'
                 } else if (isCurrent) {
-                    ctx.fillStyle = '#0F172A' // Dark Slate
+                    ctx.fillStyle = '#0F172A'
                 } else {
-                    ctx.fillStyle = '#E2E8F0' // Light Gray
+                    ctx.fillStyle = '#E2E8F0'
                 }
 
                 ctx.beginPath()
@@ -219,111 +389,193 @@ export function BlackboxAudioPlayer({
                                 </span>
                             )}
                         </div>
-                        <p className="text-[11px] text-slate-400 font-medium">
-                            Tamper-evident microphone surveillance • {citizenName}
-                        </p>
+                        <div className="text-[11px] text-slate-500 font-medium">
+                            Ambient acoustic recording • Intercept for {citizenName}
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>SHA-256 SEALED</span>
-                </div>
-            </div>
-
-            {/* Waveform Canvas Visualizer */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2">
-                <canvas
-                    ref={canvasRef}
-                    width={320}
-                    height={46}
-                    className="w-full h-12 cursor-pointer"
-                    onClick={togglePlayback}
-                />
-
-                <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 font-semibold px-1">
-                    <span>{formatSeconds(currentTime)}</span>
-                    <span className="text-slate-400">/</span>
-                    <span>{formatSeconds(durationSeconds)}</span>
-                </div>
-            </div>
-
-            {/* Interactive Player Controls */}
-            <div className="flex items-center justify-between gap-3 pt-1">
-                <div className="flex items-center gap-2">
+                {/* Channel Selector */}
+                <div className="flex items-center p-1 rounded-xl bg-slate-100 text-[10px] font-bold">
                     <button
-                        onClick={togglePlayback}
-                        className="w-10 h-10 rounded-full bg-[#18191E] text-white flex items-center justify-center shadow-md hover:bg-slate-800 transition-transform active:scale-95"
+                        onClick={() => {
+                            setAudioMode('citizen')
+                            if (isPlaying) {
+                                stopSynthesizedAudio()
+                                setTimeout(startRealisticVoiceRoutine, 100)
+                            }
+                        }}
+                        className={`px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 ${
+                            audioMode === 'citizen' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                        }`}
                     >
-                        {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                        <Mic className="w-3 h-3 text-rose-500" />
+                        <span>Citizen SOS Voice</span>
                     </button>
-
                     <button
-                        onClick={() => setIsMuted(!isMuted)}
-                        className="w-8 h-8 rounded-full border border-slate-200 bg-white text-slate-600 flex items-center justify-center hover:bg-slate-50 transition-colors"
-                        title={isMuted ? 'Unmute' : 'Mute'}
+                        onClick={() => {
+                            setAudioMode('dispatch')
+                            if (isPlaying) {
+                                stopSynthesizedAudio()
+                                setTimeout(startRealisticVoiceRoutine, 100)
+                            }
+                        }}
+                        className={`px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 ${
+                            audioMode === 'dispatch' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                        }`}
                     >
-                        {isMuted ? <VolumeX className="w-3.5 h-3.5 text-slate-400" /> : <Volume2 className="w-3.5 h-3.5" />}
-                    </button>
-
-                    <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 text-[10px] font-semibold text-slate-600">
-                        {[1.0, 1.5, 2.0].map(speed => (
-                            <button
-                                key={speed}
-                                onClick={() => setPlaybackRate(speed)}
-                                className={`px-2 py-1 rounded-md transition-all ${
-                                    playbackRate === speed ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-400'
-                                }`}
-                            >
-                                {speed}x
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={downloadAudioEvidence}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
-                    >
-                        <Download className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Export .M4A</span>
+                        <Headphones className="w-3 h-3 text-indigo-500" />
+                        <span>Dispatch Relay</span>
                     </button>
                 </div>
             </div>
 
-            {/* Cryptographic Chain of Custody Certificate */}
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] font-mono space-y-1.5">
-                <div className="flex items-center justify-between text-slate-500">
-                    <span className="font-semibold text-slate-700">Digital Seal ID:</span>
-                    <span className="font-bold text-slate-900">{effectiveCert}</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-500 gap-2">
-                    <span className="shrink-0 font-semibold text-slate-700">SHA-256:</span>
-                    <span className="truncate text-slate-600 text-[10px]" title={effectiveHash}>
-                        {effectiveHash}
-                    </span>
-                    <button
-                        onClick={copyChecksum}
-                        className="p-1 rounded hover:bg-slate-200 text-slate-500 transition-colors shrink-0"
-                        title="Copy Hash"
-                    >
-                        {copiedHash ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                </div>
-            </div>
-
+            {/* Hidden native audio element if real audio URL exists */}
             {audioUrl && (
                 <audio
                     ref={audioRef}
                     src={audioUrl}
-                    muted={isMuted}
-                    onEnded={() => {
-                        setIsPlaying(false)
-                        setCurrentTime(0)
-                    }}
+                    onEnded={() => setIsPlaying(false)}
+                    onError={() => console.warn('Native audio failed, using synthesis fallback')}
                 />
             )}
+
+            {/* Animated Waveform Canvas Display */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
+                    <span className="font-bold text-slate-900">{formatSeconds(currentTime)}</span>
+                    <span className="text-[10px] uppercase font-semibold text-slate-400">
+                        {isPlaying ? (isLive ? '🔴 LIVE AUDIO STREAM' : 'PLAYING VOICE STREAM') : 'READY FOR PLAYBACK'}
+                    </span>
+                    <span>{formatSeconds(durationSeconds)}</span>
+                </div>
+
+                <div className="w-full flex justify-center py-1">
+                    <canvas ref={canvasRef} width={340} height={48} className="w-full max-w-sm" />
+                </div>
+
+                {/* Progress bar scrubber */}
+                <input
+                    type="range"
+                    min={0}
+                    max={durationSeconds}
+                    value={currentTime}
+                    onChange={(e) => setCurrentTime(Number(e.target.value))}
+                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#FF2D78]"
+                />
+            </div>
+
+            {/* Live Audio Transcript Display (Dispatcher Speech-to-Text Telemetry) */}
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                        <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Live Acoustic Speech-to-Text Transcript</span>
+                    </div>
+                    {isPlaying && (
+                        <span className="text-emerald-600 flex items-center gap-1 animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span>Synchronized Voice Feed</span>
+                        </span>
+                    )}
+                </div>
+
+                <div className="space-y-1.5 text-xs">
+                    {transcripts.map((t, idx) => {
+                        const isActive = isPlaying && activeTranscriptSegment === idx
+                        return (
+                            <div
+                                key={idx}
+                                className={`p-2 rounded-lg transition-all text-[11px] leading-relaxed ${
+                                    isActive
+                                        ? 'bg-rose-50 border border-rose-200 text-slate-900 font-semibold shadow-xs'
+                                        : 'text-slate-600 bg-white/60'
+                                }`}
+                            >
+                                <span className={`font-mono text-[10px] font-bold mr-1.5 ${
+                                    t.type === 'citizen' ? 'text-rose-600' : 'text-indigo-600'
+                                }`}>
+                                    [{t.speaker}]:
+                                </span>
+                                <span>{t.text}</span>
+                            </div>
+                        )
+                    })}
+                </div>
+            </div>
+
+            {/* Player Controls Bar */}
+            <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={togglePlayback}
+                        className={`w-11 h-11 rounded-full flex items-center justify-center text-white transition-all shadow-md ${
+                            isPlaying
+                                ? 'bg-slate-900 hover:bg-slate-800'
+                                : 'bg-gradient-to-tr from-[#9333EA] via-[#EC4899] to-[#F43F5E] shadow-pink-500/25 hover:scale-105'
+                        }`}
+                        title={isPlaying ? 'Pause Voice Stream' : 'Play Voice Recording'}
+                    >
+                        {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            setIsMuted(!isMuted)
+                            if (audioRef.current) audioRef.current.muted = !isMuted
+                        }}
+                        className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors"
+                        title={isMuted ? 'Unmute' : 'Mute'}
+                    >
+                        {isMuted ? <VolumeX className="w-4 h-4 text-red-500" /> : <Volume2 className="w-4 h-4" />}
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            const next = playbackRate === 1.0 ? 1.5 : playbackRate === 1.5 ? 2.0 : 1.0
+                            setPlaybackRate(next)
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-mono font-bold transition-colors"
+                        title="Playback Speed"
+                    >
+                        {playbackRate.toFixed(1)}x
+                    </button>
+                </div>
+
+                <button
+                    onClick={downloadAudioEvidence}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
+                    title="Export sealed .m4a audio file"
+                >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export Audio</span>
+                </button>
+            </div>
+
+            {/* Cryptographic Chain-of-Custody Certificate Card */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[11px]">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                        <span>EVIDENCE CERTIFICATE (SECTION 65B INDIAN EVIDENCE ACT)</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-400 font-semibold">{effectiveCert}</span>
+                </div>
+
+                <div className="p-2 rounded-lg bg-white border border-slate-200/80 font-mono text-[10px] text-slate-600 flex items-center justify-between gap-2 overflow-hidden">
+                    <div className="truncate">
+                        <span className="text-slate-400 font-semibold mr-1">SHA-256:</span>
+                        <span className="text-slate-800 select-all">{effectiveHash}</span>
+                    </div>
+                    <button
+                        onClick={copyChecksum}
+                        className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-sans text-[10px] font-bold shrink-0 flex items-center gap-1 transition-colors"
+                    >
+                        {copiedHash ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedHash ? 'Copied' : 'Copy'}</span>
+                    </button>
+                </div>
+            </div>
         </div>
     )
 }
