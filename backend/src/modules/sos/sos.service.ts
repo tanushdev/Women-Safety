@@ -292,4 +292,28 @@ export class SosService {
 
         return sos;
     }
+
+    async updateAudioRecording(id: string, audioUrl: string, sha256Checksum: string, duration: number): Promise<SosDocument | null> {
+        const sos = await this.sosModel.findByIdAndUpdate(id, {
+            audioRecordingUrl: audioUrl,
+            audioRecordingDuration: duration,
+        }, { new: true });
+
+        if (this.eventsGateway && this.eventsGateway.server) {
+            this.eventsGateway.server.emit('sos:audio:uploaded', {
+                sosId: id,
+                audioRecordingUrl: audioUrl,
+                audioUrl,
+                sha256Checksum,
+            });
+            this.eventsGateway.server.emit('sos:updated', {
+                sosId: id,
+                audioRecordingUrl: audioUrl,
+                audioUrl,
+                sha256Checksum,
+            });
+        }
+
+        return sos;
+    }
 }

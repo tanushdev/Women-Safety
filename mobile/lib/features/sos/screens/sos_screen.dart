@@ -205,10 +205,21 @@ class _SosScreenState extends ConsumerState<SosScreen> with TickerProviderStateM
             : null,
         'triggeredAt': DateTime.now().toIso8601String(),
       });
-      _sosId = response.data['data']?['id'] ?? response.data['_id'];
+      final dynamic raw = response.data;
+      if (raw is Map) {
+        final dynamic dataPart = raw['data'] ?? raw;
+        if (dataPart is Map) {
+          _sosId = (dataPart['_id'] ?? dataPart['id'] ?? raw['_id'] ?? raw['id'])?.toString();
+        } else {
+          _sosId = (raw['_id'] ?? raw['id'])?.toString();
+        }
+      }
 
-      // If blackbox has already recorded audio, upload it now
+      debugPrint('🚨 SOS Triggered on Backend, assigned SOS ID: $_sosId');
+
+      // If blackbox has already recorded audio, upload it immediately
       if (_sosId != null && BlackboxService().lastRecordedAudioPath != null) {
+        debugPrint('🎙️ Uploading cached Blackbox audio to SOS $_sosId...');
         BlackboxService().uploadBlackboxAudio(_sosId!, filePath: BlackboxService().lastRecordedAudioPath);
       }
     } catch (e) {
