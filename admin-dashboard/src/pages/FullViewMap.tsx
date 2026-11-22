@@ -64,7 +64,7 @@ export function FullViewMap() {
             setZoneCount(Array.isArray(zoneRes) ? zoneRes.length : 0)
             setUserCount(Array.isArray(userRes) ? userRes.length : 0)
         } catch (e) {
-            console.error('Error fetching full view map telemetry:', e)
+            console.error('Error fetching map telemetry:', e)
         }
     }
 
@@ -121,75 +121,75 @@ export function FullViewMap() {
     }
 
     return (
-        <div className="relative w-full h-[calc(100vh-6.5rem)] rounded-2xl overflow-hidden shadow-lg border border-slate-200/80 bg-slate-900 flex flex-col">
-            {/* 🎯 Edge-to-Edge Full Screen Live Map */}
+        <div className="relative w-full h-[calc(100vh-5.5rem)] rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-slate-900 flex flex-col">
+            {/* Live Map Canvas */}
             <div className="w-full h-full relative">
                 <LiveSOSMap />
             </div>
 
-            {/* 🎯 Floating Tactical Telemetry Header */}
-            <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none flex-wrap gap-2.5">
-                {/* Left Live Status Pills */}
+            {/* Top Floating Controls */}
+            <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none flex-wrap gap-2">
+                {/* Status Pills */}
                 <div className="flex items-center gap-2 pointer-events-auto flex-wrap">
-                    <div className="px-3.5 py-1.5 rounded-full bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-sm flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <div className="px-3 py-1 rounded-full bg-white/95 backdrop-blur-md border border-slate-200 shadow-sm flex items-center gap-2 text-xs font-semibold text-slate-800">
                         <Radio className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
-                        <span>Tactical Radar Map</span>
+                        <span>Live Map</span>
                     </div>
 
                     {sosList.length > 0 ? (
-                        <div className="px-3.5 py-1.5 rounded-full bg-red-500 text-white shadow-md shadow-red-500/30 flex items-center gap-2 text-xs font-bold animate-pulse">
+                        <div className="px-3 py-1 rounded-full bg-red-500 text-white shadow-sm flex items-center gap-1.5 text-xs font-semibold animate-pulse">
                             <AlertCircle className="w-3.5 h-3.5" />
-                            <span>{sosList.length} CRITICAL DISTRESS ACTIVE</span>
+                            <span>{sosList.length} Active SOS</span>
                         </div>
                     ) : (
-                        <div className="px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm flex items-center gap-2 text-xs font-semibold">
+                        <div className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm flex items-center gap-1.5 text-xs font-medium">
                             <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            <span>All Sectors Secure</span>
+                            <span>All Clear</span>
                         </div>
                     )}
 
-                    <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-slate-200 text-xs font-semibold text-slate-700 shadow-sm">
+                    <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/95 backdrop-blur-md border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
                         <Shield className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{guardianCount} Guardians</span>
+                        <span>{guardianCount} Volunteers</span>
                     </div>
 
-                    <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-slate-200 text-xs font-semibold text-slate-700 shadow-sm">
+                    <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/95 backdrop-blur-md border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
                         <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                        <span>{zoneCount} Havens</span>
+                        <span>{zoneCount} Safe Zones</span>
                     </div>
 
-                    <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-slate-200 text-xs font-semibold text-slate-700 shadow-sm">
+                    <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/95 backdrop-blur-md border border-slate-200 text-xs font-medium text-slate-700 shadow-sm">
                         <Users className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>{userCount} Citizens</span>
+                        <span>{userCount} Users</span>
                     </div>
                 </div>
 
-                {/* Right Floating Actions */}
+                {/* Right Actions */}
                 <div className="flex items-center gap-2 pointer-events-auto">
                     <button
                         onClick={toggleFullscreen}
                         title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-                        className="w-9 h-9 rounded-full bg-white/95 backdrop-blur-md border border-slate-200 shadow-sm flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-colors"
+                        className="w-8 h-8 rounded-full bg-white/95 backdrop-blur-md border border-slate-200 shadow-sm flex items-center justify-center text-slate-700 hover:bg-slate-50 transition-colors"
                     >
-                        {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                        {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
                     </button>
                 </div>
             </div>
 
-            {/* 🎯 Interactive Blackbox Audio Stream Drawer on Map */}
+            {/* Audio Drawer */}
             {activeAudioSOS && (
-                <div className="absolute top-16 right-4 w-96 max-w-[calc(100vw-2rem)] z-30 pointer-events-auto animate-in fade-in slide-in-from-top-4 duration-200">
-                    <div className="relative shadow-2xl rounded-2xl overflow-hidden">
+                <div className="absolute top-14 right-3 w-80 max-w-[calc(100vw-2rem)] z-30 pointer-events-auto">
+                    <div className="relative shadow-xl rounded-2xl overflow-hidden">
                         <button
                             onClick={() => setActiveAudioSOS(null)}
-                            title="Close Audio Feed"
-                            className="absolute top-3 right-3 z-40 w-7 h-7 rounded-full bg-white/80 hover:bg-white text-slate-700 flex items-center justify-center shadow-sm"
+                            title="Close Audio"
+                            className="absolute top-3 right-3 z-40 w-6 h-6 rounded-full bg-white/90 hover:bg-white text-slate-700 flex items-center justify-center shadow-sm"
                         >
-                            <X className="w-4 h-4" />
+                            <X className="w-3.5 h-3.5" />
                         </button>
                         <BlackboxAudioPlayer
                             incidentId={activeAudioSOS._id}
-                            citizenName={activeAudioSOS.userId?.name || 'Citizen in Distress'}
+                            citizenName={activeAudioSOS.userId?.name || 'Citizen'}
                             audioUrl={activeAudioSOS.audioRecordingUrl || activeAudioSOS.audioUrl}
                             isLive={activeAudioSOS.status === 'TRIGGERED' || activeAudioSOS.status === 'IN_PROGRESS'}
                             sha256Checksum={activeAudioSOS.sha256Checksum}
@@ -200,18 +200,18 @@ export function FullViewMap() {
                 </div>
             )}
 
-            {/* 🎯 Floating Bottom Incident Panel (Collapsible) */}
+            {/* Floating Bottom Active SOS Panel */}
             {sosList.length > 0 && (
-                <div className="absolute bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-96 z-20 pointer-events-auto">
-                    <div className="p-4 rounded-2xl shadow-xl border border-red-100 bg-white/95 backdrop-blur-xl">
+                <div className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-3 sm:w-80 z-20 pointer-events-auto">
+                    <div className="p-3.5 rounded-2xl shadow-lg border border-red-100 bg-white/95 backdrop-blur-md">
                         <div
                             onClick={() => setPanelExpanded(!panelExpanded)}
                             className="flex items-center justify-between cursor-pointer"
                         >
                             <div className="flex items-center gap-2">
-                                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-                                <h4 className="font-bold text-xs uppercase tracking-wide text-red-600">
-                                    Active Telemetry Queue ({sosList.length})
+                                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                                <h4 className="font-bold text-xs text-red-600">
+                                    Active Alerts ({sosList.length})
                                 </h4>
                             </div>
                             <button className="text-slate-400 hover:text-slate-600">
@@ -220,24 +220,24 @@ export function FullViewMap() {
                         </div>
 
                         {panelExpanded && (
-                            <div className="mt-3 space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                            <div className="mt-2.5 space-y-2 max-h-52 overflow-y-auto pr-1">
                                 {sosList.map((sos) => {
-                                    const userName = sos.userId?.name || 'Citizen in Distress'
-                                    const phone = sos.userId?.phone || 'Emergency Direct Link'
+                                    const userName = sos.userId?.name || 'Citizen'
+                                    const phone = sos.userId?.phone || 'N/A'
                                     const coords = sos.currentLocation?.coordinates || sos.initialLocation?.coordinates || [0, 0]
 
                                     return (
                                         <div
                                             key={sos._id}
-                                            className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-3 text-xs"
+                                            className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2 text-xs"
                                         >
                                             <div className="min-w-0">
-                                                <div className="font-bold text-slate-900 truncate">{userName}</div>
-                                                <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                                                <div className="font-semibold text-slate-900 truncate">{userName}</div>
+                                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
                                                     <Phone className="w-3 h-3 text-slate-400" />
                                                     <span>{phone}</span>
                                                 </div>
-                                                <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                                <div className="text-[10px] text-slate-400 font-mono">
                                                     {coords[1].toFixed(4)}°N, {coords[0].toFixed(4)}°E
                                                 </div>
                                             </div>
@@ -245,14 +245,14 @@ export function FullViewMap() {
                                             <div className="flex items-center gap-1.5 shrink-0">
                                                 <button
                                                     onClick={() => setActiveAudioSOS(sos)}
-                                                    title="Listen to Live Blackbox Ambient Audio"
-                                                    className="p-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition-colors"
+                                                    title="Listen to Audio"
+                                                    className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition-colors"
                                                 >
                                                     <Volume2 className="w-3.5 h-3.5" />
                                                 </button>
                                                 <button
                                                     onClick={() => resolveSOS(sos._id)}
-                                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-[11px] flex items-center gap-1 shadow-sm transition-colors"
+                                                    className="px-2 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-[11px] flex items-center gap-1 shadow-sm transition-colors"
                                                 >
                                                     <CheckCircle2 className="w-3 h-3" />
                                                     <span>Resolve</span>
