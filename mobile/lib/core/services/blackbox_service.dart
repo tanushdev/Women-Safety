@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../config/app_config.dart';
 
 class BlackboxIncident {
@@ -100,14 +101,21 @@ class BlackboxService {
     }
   }
 
-  /// Automatically arms and records a 20-second tamper-evident Blackbox package during an emergency
+  /// Automatically arms and records tamper-evident Blackbox audio from phone microphone
   Future<String?> startBlackboxCapture({
-    Duration duration = const Duration(seconds: 20),
+    Duration duration = const Duration(seconds: 6),
     Function(BlackboxIncident)? onSealed,
   }) async {
     if (_isRecording) return _lastRecordedAudioPath;
 
     try {
+      // 1. Explicitly prompt user for Microphone permission
+      final micStatus = await Permission.microphone.request();
+      if (!micStatus.isGranted) {
+        debugPrint('⚠️ Microphone permission denied: $micStatus');
+        return null;
+      }
+
       final String? path = await _nativeChannel.invokeMethod<String>('startBlackboxRecording');
       _isRecording = true;
       _lastRecordedAudioPath = path;

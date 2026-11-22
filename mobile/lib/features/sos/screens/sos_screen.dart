@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:vibration/vibration.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../core/services/sms_service.dart';
 import '../../../core/services/blackbox_service.dart';
 import '../../../core/services/api_service.dart';
@@ -71,7 +72,12 @@ class _SosScreenState extends ConsumerState<SosScreen> with TickerProviderStateM
       }
     });
 
-    // 3. Acquire high-accuracy GPS
+    // 3. Request microphone permission immediately
+    try {
+      await Permission.microphone.request();
+    } catch (_) {}
+
+    // 4. Acquire high-accuracy GPS
     await _getCurrentLocation();
 
     // 4. Start 25s Blackbox Audio recording timer
@@ -183,11 +189,11 @@ class _SosScreenState extends ConsumerState<SosScreen> with TickerProviderStateM
   }
 
   Future<void> _triggerSOSApi() async {
-    // 1. Immediately initiate Blackbox tamper-evident ambient capture from phone microphone
+    // 1. Immediately initiate Blackbox capture from phone microphone with 6-second auto-seal for fast upload
     BlackboxService().startBlackboxCapture(
-      duration: const Duration(seconds: 15),
+      duration: const Duration(seconds: 6),
       onSealed: (incident) async {
-        debugPrint('🎙️ 15s Blackbox microphone capture finished. Uploading real audio...');
+        debugPrint('🎙️ 6s Blackbox microphone capture finished. Uploading real audio...');
         if (_sosId != null) {
           await BlackboxService().uploadBlackboxAudio(_sosId!, filePath: incident.audioPath);
         }

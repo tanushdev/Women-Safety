@@ -51,6 +51,11 @@ class MainActivity : FlutterActivity() {
                 // 2. Blackbox Ambient Audio Recording (High-Fidelity Tamper-Proof Evidence)
                 "startBlackboxRecording" -> {
                     try {
+                        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            result.error("PERMISSION_DENIED", "RECORD_AUDIO permission is not granted", null)
+                            return@setMethodCallHandler
+                        }
+
                         val outputDir = applicationContext.cacheDir
                         val outputFile = File(outputDir, "blackbox_${System.currentTimeMillis()}.m4a")
                         currentRecordingPath = outputFile.absolutePath
@@ -65,7 +70,6 @@ class MainActivity : FlutterActivity() {
                             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                             setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
                             setAudioEncodingBitRate(128000)
-                            setAudioSamplingRate(44100)
                             setOutputFile(currentRecordingPath)
                             prepare()
                             start()
@@ -79,7 +83,11 @@ class MainActivity : FlutterActivity() {
                 "stopBlackboxRecording" -> {
                     try {
                         mediaRecorder?.apply {
-                            stop()
+                            try {
+                                stop()
+                            } catch (e: Exception) {
+                                // Handled safely in case stop is called before min buffer
+                            }
                             release()
                         }
                         mediaRecorder = null
