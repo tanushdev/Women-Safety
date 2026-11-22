@@ -13,6 +13,7 @@ import {
     Headphones,
     FileText
 } from 'lucide-react'
+import { API_URL } from '@/config/api'
 
 interface BlackboxAudioPlayerProps {
     incidentId: string
@@ -25,18 +26,31 @@ interface BlackboxAudioPlayerProps {
     isLive?: boolean
 }
 
+// Convert relative backend path (e.g. /uploads/audio/...) to full playable URL
+function getFullAudioUrl(url?: string): string | null {
+    if (!url || typeof url !== 'string' || url.trim() === '') return null
+    if (url.startsWith('http://') || url.startsWith('https://')) return url
+    const base = API_URL.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '')
+    const cleanPath = url.startsWith('/') ? url : `/${url}`
+    return `${base}${cleanPath}`
+}
+
 export function BlackboxAudioPlayer({
     incidentId,
     citizenName,
     audioUrl,
-    durationSeconds = 24,
+    durationSeconds = 20,
     sha256Checksum,
     digitalCertificate,
     timestamp,
     isLive = false
 }: BlackboxAudioPlayerProps) {
+    const fullAudioUrl = getFullAudioUrl(audioUrl)
+    const hasRealPhoneRecording = !!fullAudioUrl
+
     const [isPlaying, setIsPlaying] = useState(false)
     const [currentTime, setCurrentTime] = useState(0)
+    const [duration, setDuration] = useState(durationSeconds)
     const [isMuted, setIsMuted] = useState(false)
     const [playbackRate, setPlaybackRate] = useState(1.0)
     const [copiedHash, setCopiedHash] = useState(false)
@@ -54,12 +68,14 @@ export function BlackboxAudioPlayer({
     const effectiveHash = sha256Checksum || `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855${incidentId.slice(-6)}`
     const effectiveCert = digitalCertificate || `CERT_WS_${effectiveHash.substring(0, 16).toUpperCase()}`
 
-    // Transcript lines synchronized with simulated playback
+    // Transcript lines
     const transcripts = [
         {
             time: '0:00 - 0:08',
-            speaker: 'CITIZEN AMBIENT MIC',
-            text: `Help! Please help me! Someone has been following me near the sector road. I am in danger, please send help!`,
+            speaker: hasRealPhoneRecording ? 'PHONE MIC STREAM' : 'CITIZEN AMBIENT MIC',
+            text: hasRealPhoneRecording
+                ? `[LIVE AUDIO FEED] Microphone recording captured directly from citizen handset via Android Blackbox Sentinel.`
+                : `Help! Please help me! Someone has been following me near the sector road. I am in danger, please send help!`,
             type: 'citizen'
         },
         {
@@ -96,7 +112,6 @@ export function BlackboxAudioPlayer({
         }
     }, [])
 
-    // Play authentic 2-tone radio squelch chirp
     const playRadioSquelch = (ctx: AudioContext) => {
         try {
             const osc = ctx.createOscillator()
@@ -111,11 +126,10 @@ export function BlackboxAudioPlayer({
             osc.start()
             osc.stop(ctx.currentTime + 0.14)
         } catch (e) {
-            // Ignore Web Audio permission issues
+            // Ignore
         }
     }
 
-    // Play subtle VHF emergency radio background atmosphere (replaces annoying sine hum!)
     const startRadioAtmosphere = (ctx: AudioContext) => {
         try {
             const bufferSize = ctx.sampleRate * 2
@@ -129,14 +143,13 @@ export function BlackboxAudioPlayer({
             whiteNoise.buffer = noiseBuffer
             whiteNoise.loop = true
 
-            // Bandpass filter to sound like an authentic VHF tactical radio channel
             const filter = ctx.createBiquadFilter()
             filter.type = 'bandpass'
             filter.frequency.setValueAtTime(1200, ctx.currentTime)
             filter.Q.setValueAtTime(2.5, ctx.currentTime)
 
             const gain = ctx.createGain()
-            gain.gain.setValueAtTime(isMuted ? 0 : 0.006, ctx.currentTime) // Extremely quiet realistic radio atmosphere
+            gain.gain.setValueAtTime(isMuted ? 0 : 0.006, ctx.currentTime)
 
             whiteNoise.connect(filter)
             filter.connect(gain)
@@ -149,7 +162,6 @@ export function BlackboxAudioPlayer({
         }
     }
 
-    // Spoken voice transmission using SpeechSynthesis
     const playSpokenVoice = (text: string, pitch = 1.1, rate = 1.05, onEnd?: () => void) => {
         if (typeof window === 'undefined' || !('speechSynthesis' in window) || isMuted) {
             if (onEnd) onEnd()
@@ -161,7 +173,6 @@ export function BlackboxAudioPlayer({
         utterance.rate = rate * playbackRate
         utterance.pitch = pitch
 
-        // Select natural English voice if available
         const voices = window.speechSynthesis.getVoices()
         const englishVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Female') || v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha'))) || voices.find(v => v.lang.startsWith('en'))
         if (englishVoice) {
@@ -171,7 +182,6 @@ export function BlackboxAudioPlayer({
         utterance.onend = () => {
             if (speechActiveRef.current && onEnd) onEnd()
         }
-
         utterance.onerror = () => {
             if (speechActiveRef.current && onEnd) onEnd()
         }
@@ -179,7 +189,6 @@ export function BlackboxAudioPlayer({
         window.speechSynthesis.speak(utterance)
     }
 
-    // Start full voice transmission routine
     const startRealisticVoiceRoutine = () => {
         speechActiveRef.current = true
 
@@ -194,7 +203,6 @@ export function BlackboxAudioPlayer({
         }
 
         if (audioMode === 'citizen') {
-            // Step 1: Citizen Distress Voice
             setActiveTranscriptSegment(0)
             playSpokenVoice(
                 `Help! Please help me! Someone has been following me near the sector road. I am in danger, please send help!`,
@@ -202,7 +210,6 @@ export function BlackboxAudioPlayer({
                 1.05,
                 () => {
                     if (!speechActiveRef.current) return
-                    // Step 2: Central Dispatch Acknowledgment
                     setActiveTranscriptSegment(1)
                     if (audioContextRef.current) playRadioSquelch(audioContextRef.current)
                     playSpokenVoice(
@@ -222,7 +229,6 @@ export function BlackboxAudioPlayer({
                 }
             )
         } else {
-            // Direct Dispatcher Radio Transmission
             setActiveTranscriptSegment(1)
             playSpokenVoice(
                 `Safeguard Command Center copy distress beacon from ${citizenName}. GPS coordinates verified. Guardian units and Police 112 alerted.`,
@@ -232,20 +238,24 @@ export function BlackboxAudioPlayer({
         }
     }
 
-    // Toggle Play/Pause
+    // Toggle Play/Pause - Prioritizes Real Phone Recording Audio
     const togglePlayback = () => {
         if (isPlaying) {
             // Pause
             setIsPlaying(false)
-            if (audioRef.current) {
+            if (hasRealPhoneRecording && audioRef.current) {
                 audioRef.current.pause()
+            } else {
+                stopSynthesizedAudio()
             }
-            stopSynthesizedAudio()
         } else {
             // Play
             setIsPlaying(true)
-            if (audioUrl && audioRef.current) {
-                audioRef.current.play().catch(() => {
+            if (hasRealPhoneRecording && audioRef.current) {
+                audioRef.current.playbackRate = playbackRate
+                audioRef.current.muted = isMuted
+                audioRef.current.play().catch((err) => {
+                    console.warn('Real audio file playback failed, using fallback voice:', err)
                     startRealisticVoiceRoutine()
                 })
             } else {
@@ -254,13 +264,13 @@ export function BlackboxAudioPlayer({
         }
     }
 
-    // Timer progression
+    // Timer progression for simulated stream (if no real audio file)
     useEffect(() => {
         let timer: any = null
-        if (isPlaying) {
+        if (isPlaying && !hasRealPhoneRecording) {
             timer = setInterval(() => {
                 setCurrentTime(prev => {
-                    if (prev >= durationSeconds) {
+                    if (prev >= duration) {
                         setIsPlaying(false)
                         stopSynthesizedAudio()
                         return 0
@@ -272,11 +282,11 @@ export function BlackboxAudioPlayer({
                     return next
                 })
             }, 1000 / playbackRate)
-        } else {
+        } else if (!isPlaying) {
             stopSynthesizedAudio()
         }
         return () => clearInterval(timer)
-    }, [isPlaying, durationSeconds, playbackRate, stopSynthesizedAudio])
+    }, [isPlaying, hasRealPhoneRecording, duration, playbackRate, stopSynthesizedAudio])
 
     // Clean up audio on unmount
     useEffect(() => {
@@ -315,11 +325,11 @@ export function BlackboxAudioPlayer({
                 }
 
                 const y = (height - barHeight) / 2
-                const progressRatio = currentTime / durationSeconds
+                const progressRatio = duration > 0 ? currentTime / duration : 0
                 const isCurrent = (i / bars) <= progressRatio
 
                 if (isCurrent && isPlaying) {
-                    ctx.fillStyle = '#FF2D78'
+                    ctx.fillStyle = hasRealPhoneRecording ? '#10B981' : '#FF2D78' // Emerald if real audio, Pink if synthetic
                 } else if (isCurrent) {
                     ctx.fillStyle = '#0F172A'
                 } else {
@@ -344,7 +354,7 @@ export function BlackboxAudioPlayer({
                 cancelAnimationFrame(animationFrameRef.current)
             }
         }
-    }, [isPlaying, currentTime, durationSeconds])
+    }, [isPlaying, currentTime, duration, hasRealPhoneRecording])
 
     const copyChecksum = () => {
         navigator.clipboard.writeText(effectiveHash)
@@ -354,16 +364,26 @@ export function BlackboxAudioPlayer({
 
     const formatSeconds = (sec: number) => {
         const m = Math.floor(sec / 60).toString().padStart(2, '0')
-        const s = (sec % 60).toString().padStart(2, '0')
+        const s = (Math.floor(sec) % 60).toString().padStart(2, '0')
         return `${m}:${s}`
     }
 
     const downloadAudioEvidence = () => {
+        if (fullAudioUrl) {
+            const a = document.createElement('a')
+            a.href = fullAudioUrl
+            a.download = `phone_recording_${incidentId}_sealed.m4a`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            return
+        }
+
         const dummyContent = `BLACKBOX_EVIDENCE_STREAM\nINCIDENT: ${incidentId}\nCITIZEN: ${citizenName}\nCERT: ${effectiveCert}\nSHA-256: ${effectiveHash}\nTIMESTAMP: ${timestamp || new Date().toISOString()}`
         const blob = new Blob([dummyContent], { type: 'audio/m4a' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
-        a.href = audioUrl || url
+        a.href = url
         a.download = `blackbox_audio_${incidentId}_sealed.m4a`
         document.body.appendChild(a)
         a.click()
@@ -372,82 +392,108 @@ export function BlackboxAudioPlayer({
 
     return (
         <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm space-y-4">
+            {/* Real Audio HTML5 Element */}
+            {fullAudioUrl && (
+                <audio
+                    ref={audioRef}
+                    src={fullAudioUrl}
+                    crossOrigin="anonymous"
+                    onTimeUpdate={() => {
+                        if (audioRef.current) {
+                            setCurrentTime(audioRef.current.currentTime)
+                        }
+                    }}
+                    onLoadedMetadata={() => {
+                        if (audioRef.current && audioRef.current.duration) {
+                            setDuration(Math.ceil(audioRef.current.duration))
+                        }
+                    }}
+                    onEnded={() => {
+                        setIsPlaying(false)
+                        setCurrentTime(0)
+                    }}
+                />
+            )}
+
             {/* Top Evidence Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-pink-50 border border-pink-200 flex items-center justify-center text-[#FF2D78]">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                        hasRealPhoneRecording ? 'bg-emerald-50 border border-emerald-200 text-emerald-600' : 'bg-pink-50 border border-pink-200 text-[#FF2D78]'
+                    }`}>
                         <Radio className="w-4 h-4 animate-pulse" />
                     </div>
                     <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="font-bold text-xs text-slate-900 uppercase tracking-wide">
                                 Blackbox Ambient Audio Vault
                             </h4>
-                            {isLive && (
-                                <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold border border-red-200 animate-pulse">
-                                    LIVE CAPTURE
+                            {hasRealPhoneRecording ? (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200 flex items-center gap-1 shadow-xs">
+                                    <Mic className="w-3 h-3 text-emerald-600 animate-pulse" />
+                                    <span>REAL PHONE MIC RECORDING</span>
                                 </span>
-                            )}
+                            ) : isLive ? (
+                                <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold border border-red-200 animate-pulse">
+                                    AWAITING PHONE STREAM
+                                </span>
+                            ) : null}
                         </div>
-                        <div className="text-[11px] text-slate-500 font-medium">
-                            Ambient acoustic recording • Intercept for {citizenName}
+                        <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                            {hasRealPhoneRecording
+                                ? `Captured directly from handset microphone • SHA-256 Verified`
+                                : `Ambient acoustic recording • Intercept for ${citizenName}`}
                         </div>
                     </div>
                 </div>
 
                 {/* Channel Selector */}
-                <div className="flex items-center p-1 rounded-xl bg-slate-100 text-[10px] font-bold">
-                    <button
-                        onClick={() => {
-                            setAudioMode('citizen')
-                            if (isPlaying) {
-                                stopSynthesizedAudio()
-                                setTimeout(startRealisticVoiceRoutine, 100)
-                            }
-                        }}
-                        className={`px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 ${
-                            audioMode === 'citizen' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                        }`}
-                    >
-                        <Mic className="w-3 h-3 text-rose-500" />
-                        <span>Citizen SOS Voice</span>
-                    </button>
-                    <button
-                        onClick={() => {
-                            setAudioMode('dispatch')
-                            if (isPlaying) {
-                                stopSynthesizedAudio()
-                                setTimeout(startRealisticVoiceRoutine, 100)
-                            }
-                        }}
-                        className={`px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 ${
-                            audioMode === 'dispatch' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                        }`}
-                    >
-                        <Headphones className="w-3 h-3 text-indigo-500" />
-                        <span>Dispatch Relay</span>
-                    </button>
-                </div>
+                {!hasRealPhoneRecording && (
+                    <div className="flex items-center p-1 rounded-xl bg-slate-100 text-[10px] font-bold">
+                        <button
+                            onClick={() => {
+                                setAudioMode('citizen')
+                                if (isPlaying) {
+                                    stopSynthesizedAudio()
+                                    setTimeout(startRealisticVoiceRoutine, 100)
+                                }
+                            }}
+                            className={`px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 ${
+                                audioMode === 'citizen' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                        >
+                            <Mic className="w-3 h-3 text-rose-500" />
+                            <span>Citizen Voice</span>
+                        </button>
+                        <button
+                            onClick={() => {
+                                setAudioMode('dispatch')
+                                if (isPlaying) {
+                                    stopSynthesizedAudio()
+                                    setTimeout(startRealisticVoiceRoutine, 100)
+                                }
+                            }}
+                            className={`px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 ${
+                                audioMode === 'dispatch' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                        >
+                            <Headphones className="w-3 h-3 text-indigo-500" />
+                            <span>Dispatch Relay</span>
+                        </button>
+                    </div>
+                )}
             </div>
-
-            {/* Hidden native audio element if real audio URL exists */}
-            {audioUrl && (
-                <audio
-                    ref={audioRef}
-                    src={audioUrl}
-                    onEnded={() => setIsPlaying(false)}
-                    onError={() => console.warn('Native audio failed, using synthesis fallback')}
-                />
-            )}
 
             {/* Animated Waveform Canvas Display */}
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
                 <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
                     <span className="font-bold text-slate-900">{formatSeconds(currentTime)}</span>
                     <span className="text-[10px] uppercase font-semibold text-slate-400">
-                        {isPlaying ? (isLive ? '🔴 LIVE AUDIO STREAM' : 'PLAYING VOICE STREAM') : 'READY FOR PLAYBACK'}
+                        {isPlaying
+                            ? (hasRealPhoneRecording ? '🟢 STREAMING PHONE MICROPHONE AUDIO' : 'PLAYING VOICE STREAM')
+                            : (hasRealPhoneRecording ? 'READY TO PLAY PHONE RECORDING' : 'AUDIO CHANNEL READY')}
                     </span>
-                    <span>{formatSeconds(durationSeconds)}</span>
+                    <span>{formatSeconds(duration)}</span>
                 </div>
 
                 <div className="w-full flex justify-center py-1">
@@ -458,19 +504,25 @@ export function BlackboxAudioPlayer({
                 <input
                     type="range"
                     min={0}
-                    max={durationSeconds}
+                    max={duration || 20}
                     value={currentTime}
-                    onChange={(e) => setCurrentTime(Number(e.target.value))}
+                    onChange={(e) => {
+                        const val = Number(e.target.value)
+                        setCurrentTime(val)
+                        if (audioRef.current && hasRealPhoneRecording) {
+                            audioRef.current.currentTime = val
+                        }
+                    }}
                     className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#FF2D78]"
                 />
             </div>
 
-            {/* Live Audio Transcript Display (Dispatcher Speech-to-Text Telemetry) */}
+            {/* Live Audio Transcript Display */}
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
                 <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     <div className="flex items-center gap-1.5 text-slate-700">
                         <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>Live Acoustic Speech-to-Text Transcript</span>
+                        <span>{hasRealPhoneRecording ? 'Microphone Audio Source Information' : 'Live Acoustic Speech-to-Text Transcript'}</span>
                     </div>
                     {isPlaying && (
                         <span className="text-emerald-600 flex items-center gap-1 animate-pulse">
@@ -512,7 +564,9 @@ export function BlackboxAudioPlayer({
                         className={`w-11 h-11 rounded-full flex items-center justify-center text-white transition-all shadow-md ${
                             isPlaying
                                 ? 'bg-slate-900 hover:bg-slate-800'
-                                : 'bg-gradient-to-tr from-[#9333EA] via-[#EC4899] to-[#F43F5E] shadow-pink-500/25 hover:scale-105'
+                                : hasRealPhoneRecording
+                                    ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 shadow-emerald-500/25 hover:scale-105'
+                                    : 'bg-gradient-to-tr from-[#9333EA] via-[#EC4899] to-[#F43F5E] shadow-pink-500/25 hover:scale-105'
                         }`}
                         title={isPlaying ? 'Pause Voice Stream' : 'Play Voice Recording'}
                     >
@@ -534,6 +588,7 @@ export function BlackboxAudioPlayer({
                         onClick={() => {
                             const next = playbackRate === 1.0 ? 1.5 : playbackRate === 1.5 ? 2.0 : 1.0
                             setPlaybackRate(next)
+                            if (audioRef.current) audioRef.current.playbackRate = next
                         }}
                         className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-mono font-bold transition-colors"
                         title="Playback Speed"

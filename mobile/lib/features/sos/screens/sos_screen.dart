@@ -183,8 +183,16 @@ class _SosScreenState extends ConsumerState<SosScreen> with TickerProviderStateM
   }
 
   Future<void> _triggerSOSApi() async {
-    // 1. Immediately initiate Blackbox tamper-evident ambient capture
-    BlackboxService().startBlackboxCapture();
+    // 1. Immediately initiate Blackbox tamper-evident ambient capture from phone microphone
+    BlackboxService().startBlackboxCapture(
+      duration: const Duration(seconds: 15),
+      onSealed: (incident) async {
+        debugPrint('🎙️ 15s Blackbox microphone capture finished. Uploading real audio...');
+        if (_sosId != null) {
+          await BlackboxService().uploadBlackboxAudio(_sosId!, filePath: incident.audioPath);
+        }
+      },
+    );
 
     try {
       final apiService = ref.read(apiServiceProvider);
@@ -198,6 +206,11 @@ class _SosScreenState extends ConsumerState<SosScreen> with TickerProviderStateM
         'triggeredAt': DateTime.now().toIso8601String(),
       });
       _sosId = response.data['data']?['id'] ?? response.data['_id'];
+
+      // If blackbox has already recorded audio, upload it now
+      if (_sosId != null && BlackboxService().lastRecordedAudioPath != null) {
+        BlackboxService().uploadBlackboxAudio(_sosId!, filePath: BlackboxService().lastRecordedAudioPath);
+      }
     } catch (e) {
       debugPrint('Error triggering SOS API (Offline Fallback engaging): $e');
       // Direct cellular offline fallback
@@ -1000,6 +1013,14 @@ class _SosScreenState extends ConsumerState<SosScreen> with TickerProviderStateM
             onPressed: () async {
               if (_sosId != null) {
                 try {
+                  // Seal and upload any in-flight microphone recording
+                  if (BlackboxService().isRecording) {
+                    BlackboxService().stopAndSealBlackbox().then((incident) {
+                      if (incident != null && _sosId != null) {
+                        BlackboxService().uploadBlackboxAudio(_sosId!, filePath: incident.audioPath);
+                      }
+                    });
+                  }
                   final apiService = ref.read(apiServiceProvider);
                   await apiService.cancelSOS(_sosId!);
                 } catch (e) {

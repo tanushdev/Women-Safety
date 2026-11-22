@@ -1,6 +1,9 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Request, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { SosService } from './sos.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
@@ -63,6 +66,49 @@ export class SosController {
             expiresAt: new Date(Date.now() + body.durationMinutes * 60 * 1000),
             message: `Dead man switch active. Alert will automatically fire in ${body.durationMinutes} minutes unless cancelled.`,
         };
+    }
+
+    @Post(':id/audio')
+    @UseInterceptors(FileInterceptor('audio'))
+    @ApiOperation({ summary: 'Attach real audio recording from mobile phone to an SOS event' })
+    async uploadAudio(
+        @Param('id') id: string,
+        @Body() body: { base64?: string; duration?: number; filename?: string },
+        @UploadedFile() file?: any
+    ) {
+        const uploadsDir = path.join(process.cwd(), 'uploads', 'audio');
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        const fileName = `sos_${id}_${Date.now()}.m4a`;
+        const filePath = path.join(uploadsDir, fileName);
+
+        let fileBuffer: Buffer | null = null;
+        if (file?.buffer) {
+            fileBuffer = file.buffer;
+        } else if (body.base64) {
+            const clean = body.base64.replace(/^data:audio\/\w+;base64,/, '');
+            fileBuffer = Buffer.from(clean, 'base64');
+        }
+
+        if (fileBuffer && fileBuffer.length > 0) {
+            fs.writeFileSync(filePath, fileBuffer);
+            const sha256 = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+            const audioUrl = `/uploads/audio/${fileName}`;
+            const sos = await this.sosService.findOne(id);
+            if (sos) {
+                sos.audioRecordingUrl = audioUrl;
+                sos.audioRecordingDuration = body.duration || 25;
+                await (sos as any).save();
+            }
+            return {
+                success: true,
+                audioUrl,
+                audioRecordingUrl: audioUrl,
+                sha256Checksum: sha256,
+            };
+        }
+        return { success: false, message: 'No audio data received' };
     }
 
     @Get(':id/evidence')

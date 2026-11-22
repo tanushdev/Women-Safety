@@ -4,6 +4,9 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import compression from 'compression';
+import express from 'express';
+import path from 'path';
+import fs from 'fs';
 import { AppModule } from './app.module';
 import { Logger } from './common/logger/logger.service';
 
@@ -15,6 +18,16 @@ async function bootstrap() {
     const configService = app.get(ConfigService);
     const port = configService.get<number>('PORT', 3000);
     const apiPrefix = configService.get<string>('API_PREFIX', 'api/v1');
+
+    // Ensure uploads directory exists
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'audio');
+    if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // Serve static audio and evidence uploads
+    app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+    app.use(`/${apiPrefix}/uploads`, express.static(path.join(process.cwd(), 'uploads')));
 
     // Security - disable strict CSP on docs so Swagger UI assets can render
     app.use(

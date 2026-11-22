@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import '../config/app_config.dart';
 
 class BlackboxIncident {
   final String id;
@@ -59,8 +61,10 @@ class BlackboxService {
   static const MethodChannel _nativeChannel = MethodChannel('com.women_safety.app/native_security');
   bool _isRecording = false;
   Timer? _autoStopTimer;
+  String? _lastRecordedAudioPath;
 
   bool get isRecording => _isRecording;
+  String? get lastRecordedAudioPath => _lastRecordedAudioPath;
   final ValueNotifier<bool> isRecordingNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<List<BlackboxIncident>> evidenceVaultNotifier = ValueNotifier<List<BlackboxIncident>>([]);
 
@@ -96,20 +100,21 @@ class BlackboxService {
     }
   }
 
-  /// Automatically arms and records a 25-second tamper-evident Blackbox package during an emergency
+  /// Automatically arms and records a 20-second tamper-evident Blackbox package during an emergency
   Future<String?> startBlackboxCapture({
-    Duration duration = const Duration(seconds: 25),
+    Duration duration = const Duration(seconds: 20),
     Function(BlackboxIncident)? onSealed,
   }) async {
-    if (_isRecording) return null;
+    if (_isRecording) return _lastRecordedAudioPath;
 
     try {
       final String? path = await _nativeChannel.invokeMethod<String>('startBlackboxRecording');
       _isRecording = true;
+      _lastRecordedAudioPath = path;
       isRecordingNotifier.value = true;
-      debugPrint('🎙️ Blackbox audio recording started: $path');
+      debugPrint('🎙️ Real phone microphone audio recording started at: $path');
 
-      // Automatically seal package when duration expires
+      // Automatically stop and seal package when duration expires
       _autoStopTimer?.cancel();
       _autoStopTimer = Timer(duration, () async {
         final incident = await stopAndSealBlackbox();
@@ -127,7 +132,7 @@ class BlackboxService {
     }
   }
 
-  /// Stops recording, computes SHA-256 cryptographic checksum, and seals evidence
+  /// Stops recording from microphone, computes SHA-256 cryptographic checksum, and seals evidence
   Future<BlackboxIncident?> stopAndSealBlackbox() async {
     if (!_isRecording) return null;
     _autoStopTimer?.cancel();
@@ -137,12 +142,14 @@ class BlackboxService {
       _isRecording = false;
       isRecordingNotifier.value = false;
 
-      if (audioPath == null || !File(audioPath).existsSync()) {
-        debugPrint('Blackbox file not found on disk');
+      final resolvedPath = audioPath ?? _lastRecordedAudioPath;
+      if (resolvedPath == null || !File(resolvedPath).existsSync()) {
+        debugPrint('Blackbox audio file not found on disk: $resolvedPath');
         return null;
       }
 
-      final fileBytes = await File(audioPath).readAsBytes();
+      _lastRecordedAudioPath = resolvedPath;
+      final fileBytes = await File(resolvedPath).readAsBytes();
       final sha256Digest = sha256.convert(fileBytes).toString();
       final digitalCert = 'CERT_WS_${sha256Digest.substring(0, 16).toUpperCase()}';
 
@@ -160,7 +167,7 @@ class BlackboxService {
       final incident = BlackboxIncident(
         id: 'BB_${DateTime.now().millisecondsSinceEpoch}',
         timestamp: DateTime.now(),
-        audioPath: audioPath,
+        audioPath: resolvedPath,
         sha256Checksum: sha256Digest,
         digitalCertificate: digitalCert,
         latitude: loc?.latitude ?? 0.0,
@@ -168,12 +175,83 @@ class BlackboxService {
       );
 
       await _saveIncident(incident);
+      debugPrint('🎙️ Real audio captured and sealed (${fileBytes.length} bytes, SHA-256: $sha256Digest)');
       return incident;
     } catch (e) {
       debugPrint('Error sealing Blackbox package: $e');
       _isRecording = false;
       isRecordingNotifier.value = false;
       return null;
+    }
+  }
+
+  /// Uploads real audio recording file to the backend server
+  Future<bool> uploadBlackboxAudio(String sosId, {String? filePath}) async {
+    try {
+      final targetPath = filePath ?? _lastRecordedAudioPath ?? (evidenceVaultNotifier.value.isNotEmpty ? evidenceVaultNotifier.value.first.audioPath : null);
+      if (targetPath == null) {
+        debugPrint('⚠️ No blackbox audio path found to upload');
+        return false;
+      }
+
+      final file = File(targetPath);
+      if (!file.existsSync()) {
+        debugPrint('⚠️ Blackbox audio file does not exist on disk: $targetPath');
+        return false;
+      }
+
+      final fileBytes = await file.readAsBytes();
+      if (fileBytes.isEmpty) {
+        debugPrint('⚠️ Blackbox audio file is 0 bytes, skipping upload');
+        return false;
+      }
+
+      final base64Audio = base64Encode(fileBytes);
+      final sha256Digest = sha256.convert(fileBytes).toString();
+
+      debugPrint('📤 Uploading real phone audio (${fileBytes.length} bytes, SHA-256: ${sha256Digest.substring(0, 8)}...) to SOS $sosId');
+
+      final dio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(seconds: 20),
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+      ));
+
+      Response? res;
+      try {
+        res = await dio.post(
+          '${AppConfig.apiBaseUrl}/media/evidence/$sosId/audio',
+          data: {
+            'base64': base64Audio,
+            'duration': 20,
+            'filename': 'phone_mic_${sosId}_${DateTime.now().millisecondsSinceEpoch}.m4a',
+            'sha256Checksum': sha256Digest,
+          },
+        );
+      } catch (e) {
+        debugPrint('Media upload route error ($e), trying direct /sos/$sosId/audio route...');
+        res = await dio.post(
+          '${AppConfig.apiBaseUrl}/sos/$sosId/audio',
+          data: {
+            'base64': base64Audio,
+            'duration': 20,
+            'filename': 'phone_mic_${sosId}_${DateTime.now().millisecondsSinceEpoch}.m4a',
+            'sha256Checksum': sha256Digest,
+          },
+        );
+      }
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        debugPrint('✅ Real phone audio successfully uploaded to backend for SOS $sosId');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('❌ Failed to upload real phone audio: $e');
+      return false;
     }
   }
 }
